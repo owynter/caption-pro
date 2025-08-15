@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Plus, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Plus, AlignLeft, AlignCenter, AlignRight, RotateCcw } from 'lucide-react';
 import { TextElement } from '../MemeGenerator';
 
 interface TextPanelProps {
@@ -180,6 +180,34 @@ export const TextPanel = ({ selectedElement, onAddText, onUpdateText }: TextPane
 
             <div>
               <Label className="text-sm font-medium">
+                Line Height: {selectedElement.lineHeight?.toFixed(1) || '1.2'}
+              </Label>
+              <Slider
+                value={[selectedElement.lineHeight || 1.2]}
+                onValueChange={([value]) => onUpdateText(selectedElement.id, { lineHeight: value })}
+                min={0.5}
+                max={3}
+                step={0.1}
+                className="mt-2"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">
+                Letter Spacing: {selectedElement.letterSpacing || 0}px
+              </Label>
+              <Slider
+                value={[selectedElement.letterSpacing || 0]}
+                onValueChange={([value]) => onUpdateText(selectedElement.id, { letterSpacing: value })}
+                min={-10}
+                max={50}
+                step={0.5}
+                className="mt-2"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">
                 Rotation: {selectedElement.rotation}°
               </Label>
               <Slider
@@ -190,6 +218,35 @@ export const TextPanel = ({ selectedElement, onAddText, onUpdateText }: TextPane
                 step={1}
                 className="mt-2"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium">
+                  Skew X: {selectedElement.skewX || 0}°
+                </Label>
+                <Slider
+                  value={[selectedElement.skewX || 0]}
+                  onValueChange={([value]) => onUpdateText(selectedElement.id, { skewX: value })}
+                  min={-45}
+                  max={45}
+                  step={1}
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium">
+                  Skew Y: {selectedElement.skewY || 0}°
+                </Label>
+                <Slider
+                  value={[selectedElement.skewY || 0]}
+                  onValueChange={([value]) => onUpdateText(selectedElement.id, { skewY: value })}
+                  min={-45}
+                  max={45}
+                  step={1}
+                  className="mt-2"
+                />
+              </div>
             </div>
           </div>
         ) : (

@@ -95,19 +95,19 @@ export const StylePanel = ({ selectedElement, onUpdateText }: StylePanelProps) =
             />
           </div>
 
-          <div>
-            <Label className="text-sm font-medium">
-              Stroke Width: {selectedElement.strokeWidth}px
-            </Label>
-            <Slider
-              value={[selectedElement.strokeWidth]}
-              onValueChange={([value]) => onUpdateText(selectedElement.id, { strokeWidth: value })}
-              min={0}
-              max={20}
-              step={1}
-              className="mt-2"
-            />
-          </div>
+            <div>
+              <Label className="text-sm font-medium">
+                Stroke Width: {selectedElement.strokeWidth}px
+              </Label>
+              <Slider
+                value={[selectedElement.strokeWidth]}
+                onValueChange={([value]) => onUpdateText(selectedElement.id, { strokeWidth: value })}
+                min={0}
+                max={100}
+                step={1}
+                className="mt-2"
+              />
+            </div>
         </div>
       </Card>
 

@@ -40,6 +40,11 @@ export const CanvasArea = forwardRef<HTMLCanvasElement, CanvasAreaProps>(({
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Draw grid if enabled
+    if (canvasState.snapToGrid) {
+      drawGrid(ctx);
+    }
+
     // Draw background image
     if (canvasState.backgroundImage) {
       const img = new Image();
@@ -55,6 +60,33 @@ export const CanvasArea = forwardRef<HTMLCanvasElement, CanvasAreaProps>(({
       drawTextElements(ctx);
     }
   }, [canvasState]);
+
+  const drawGrid = (ctx: CanvasRenderingContext2D) => {
+    const gridSize = canvasState.gridSize;
+    
+    ctx.save();
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    
+    // Draw vertical lines
+    for (let x = 0; x <= canvasState.canvasWidth; x += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvasState.canvasHeight);
+      ctx.stroke();
+    }
+    
+    // Draw horizontal lines
+    for (let y = 0; y <= canvasState.canvasHeight; y += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvasState.canvasWidth, y);
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+  };
 
   const drawTextElements = (ctx: CanvasRenderingContext2D) => {
     const sortedElements = [...canvasState.textElements].sort((a, b) => a.zIndex - b.zIndex);
@@ -75,10 +107,22 @@ export const CanvasArea = forwardRef<HTMLCanvasElement, CanvasAreaProps>(({
       ctx.rotate((element.rotation * Math.PI) / 180);
       ctx.translate(-centerX, -centerY);
 
-      // Set font and alignment
+      // Apply skew transformations
+      if (element.skewX || element.skewY) {
+        const skewXRad = (element.skewX || 0) * Math.PI / 180;
+        const skewYRad = (element.skewY || 0) * Math.PI / 180;
+        ctx.transform(1, Math.tan(skewYRad), Math.tan(skewXRad), 1, 0, 0);
+      }
+
+      // Set font and alignment with letter spacing
       ctx.font = `${element.fontWeight} ${element.fontSize}px ${element.fontFamily}`;
       ctx.textAlign = element.textAlign;
       ctx.textBaseline = 'middle';
+      
+      // Handle letter spacing
+      if (element.letterSpacing && element.letterSpacing !== 0) {
+        ctx.letterSpacing = `${element.letterSpacing}px`;
+      }
 
       // Calculate text position based on alignment
       let textX = element.x;
@@ -89,30 +133,64 @@ export const CanvasArea = forwardRef<HTMLCanvasElement, CanvasAreaProps>(({
       }
       const textY = element.y + element.height / 2;
 
-      // Draw shadow
-      if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
-        ctx.save();
-        ctx.shadowColor = element.shadowColor;
-        ctx.shadowBlur = element.shadowBlur;
-        ctx.shadowOffsetX = element.shadowOffsetX;
-        ctx.shadowOffsetY = element.shadowOffsetY;
-        ctx.fillStyle = element.shadowColor;
-        ctx.fillText(element.content, textX, textY);
-        ctx.restore();
-      }
+      // Handle multi-line text with line height
+      const lines = element.content.split('\n');
+      const lineHeight = (element.lineHeight || 1.2) * element.fontSize;
+      
+      // Function to render text with letter spacing
+      const renderTextLine = (line: string, x: number, y: number, renderFn: (text: string, x: number, y: number) => void) => {
+        if (element.letterSpacing && element.letterSpacing !== 0) {
+          // Manual character spacing
+          let currentX = x;
+          if (element.textAlign === 'center') {
+            const totalWidth = [...line].reduce((width, char) => {
+              return width + ctx.measureText(char).width + (element.letterSpacing || 0);
+            }, 0) - (element.letterSpacing || 0);
+            currentX = x - totalWidth / 2;
+          } else if (element.textAlign === 'right') {
+            const totalWidth = [...line].reduce((width, char) => {
+              return width + ctx.measureText(char).width + (element.letterSpacing || 0);
+            }, 0) - (element.letterSpacing || 0);
+            currentX = x - totalWidth;
+          }
+          
+          for (const char of line) {
+            renderFn(char, currentX, y);
+            currentX += ctx.measureText(char).width + (element.letterSpacing || 0);
+          }
+        } else {
+          renderFn(line, x, y);
+        }
+      };
+      
+      lines.forEach((line, index) => {
+        const lineY = textY + (index - (lines.length - 1) / 2) * lineHeight;
+        
+        // Draw shadow for each line
+        if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
+          ctx.save();
+          ctx.shadowColor = element.shadowColor;
+          ctx.shadowBlur = element.shadowBlur;
+          ctx.shadowOffsetX = element.shadowOffsetX;
+          ctx.shadowOffsetY = element.shadowOffsetY;
+          ctx.fillStyle = element.shadowColor;
+          renderTextLine(line, textX, lineY, (text, x, y) => ctx.fillText(text, x, y));
+          ctx.restore();
+        }
 
-      // Draw stroke
-      if (element.strokeWidth > 0) {
-        ctx.strokeStyle = element.strokeColor;
-        ctx.lineWidth = element.strokeWidth;
-        ctx.lineJoin = 'round';
-        ctx.miterLimit = 2;
-        ctx.strokeText(element.content, textX, textY);
-      }
+        // Draw stroke for each line
+        if (element.strokeWidth > 0) {
+          ctx.strokeStyle = element.strokeColor;
+          ctx.lineWidth = element.strokeWidth;
+          ctx.lineJoin = 'round';
+          ctx.miterLimit = 2;
+          renderTextLine(line, textX, lineY, (text, x, y) => ctx.strokeText(text, x, y));
+        }
 
-      // Draw fill
-      ctx.fillStyle = element.color;
-      ctx.fillText(element.content, textX, textY);
+        // Draw fill for each line
+        ctx.fillStyle = element.color;
+        renderTextLine(line, textX, lineY, (text, x, y) => ctx.fillText(text, x, y));
+      });
 
       // Draw selection outline
       if (element.selected) {
@@ -173,12 +251,27 @@ export const CanvasArea = forwardRef<HTMLCanvasElement, CanvasAreaProps>(({
     }
   };
 
+  const snapToGrid = (x: number, y: number) => {
+    if (!canvasState.snapToGrid) return { x, y };
+    
+    const gridSize = canvasState.gridSize;
+    return {
+      x: Math.round(x / gridSize) * gridSize,
+      y: Math.round(y / gridSize) * gridSize
+    };
+  };
+
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging || !dragElement) return;
 
     const pos = getMousePosition(event);
-    const newX = pos.x - dragOffset.x;
-    const newY = pos.y - dragOffset.y;
+    let newX = pos.x - dragOffset.x;
+    let newY = pos.y - dragOffset.y;
+
+    // Apply snap to grid
+    const snapped = snapToGrid(newX, newY);
+    newX = snapped.x;
+    newY = snapped.y;
 
     onUpdateText(dragElement, { x: newX, y: newY });
   };

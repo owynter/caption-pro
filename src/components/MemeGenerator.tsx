@@ -43,6 +43,10 @@ export interface TextElement {
   shadowBlur: number;
   shadowOffsetX: number;
   shadowOffsetY: number;
+  lineHeight: number;
+  letterSpacing: number;
+  skewX: number;
+  skewY: number;
 }
 
 export interface CanvasState {
@@ -51,6 +55,8 @@ export interface CanvasState {
   canvasWidth: number;
   canvasHeight: number;
   zoom: number;
+  snapToGrid: boolean;
+  gridSize: number;
 }
 
 export const MemeGenerator = () => {
@@ -59,7 +65,9 @@ export const MemeGenerator = () => {
     textElements: [],
     canvasWidth: 800,
     canvasHeight: 600,
-    zoom: 1
+    zoom: 1,
+    snapToGrid: false,
+    gridSize: 20
   });
 
   const [selectedPanel, setSelectedPanel] = useState<string>('image');
@@ -121,7 +129,11 @@ export const MemeGenerator = () => {
       shadowColor: '#000000',
       shadowBlur: 4,
       shadowOffsetX: 2,
-      shadowOffsetY: 2
+      shadowOffsetY: 2,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      skewX: 0,
+      skewY: 0
     };
 
     updateCanvasState({
@@ -157,6 +169,21 @@ export const MemeGenerator = () => {
       setSelectedTextId(null);
     }
   }, [selectedTextId, canvasState.textElements, updateCanvasState]);
+
+  const reorderLayers = useCallback((fromIndex: number, toIndex: number) => {
+    const sortedElements = [...canvasState.textElements].sort((a, b) => b.zIndex - a.zIndex);
+    const draggedElement = sortedElements[fromIndex];
+    const targetElement = sortedElements[toIndex];
+    
+    if (draggedElement && targetElement) {
+      const newZIndex = targetElement.zIndex;
+      updateCanvasState({
+        textElements: canvasState.textElements.map(el => 
+          el.id === draggedElement.id ? { ...el, zIndex: newZIndex } : el
+        )
+      });
+    }
+  }, [canvasState.textElements, updateCanvasState]);
 
   const duplicateSelectedText = useCallback(() => {
     if (selectedTextId) {
@@ -252,6 +279,7 @@ export const MemeGenerator = () => {
               size="sm"
               onClick={duplicateSelectedText}
               disabled={!selectedTextId}
+              title="Duplicate (Ctrl+D)"
             >
               <Copy className="h-4 w-4" />
             </Button>
@@ -260,8 +288,19 @@ export const MemeGenerator = () => {
               size="sm"
               onClick={deleteSelectedText}
               disabled={!selectedTextId}
+              title="Delete (Del)"
             >
               <Trash2 className="h-4 w-4" />
+            </Button>
+            <Separator orientation="vertical" className="h-6" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => updateCanvasState({ snapToGrid: !canvasState.snapToGrid })}
+              className={canvasState.snapToGrid ? "bg-secondary" : ""}
+              title="Toggle Snap to Grid"
+            >
+              <span className="text-xs font-medium">Grid</span>
             </Button>
             <Button 
               onClick={() => setShowExportDialog(true)}
@@ -323,6 +362,7 @@ export const MemeGenerator = () => {
                 onSelectText={selectTextElement}
                 onUpdateText={updateTextElement}
                 onDeleteText={deleteSelectedText}
+                onReorderLayers={reorderLayers}
               />
             )}
           </div>

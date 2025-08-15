@@ -1,3 +1,4 @@
+import { useState, DragEvent } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +8,8 @@ import {
   ArrowUp, 
   ArrowDown, 
   Trash2,
-  Type
+  Type,
+  GripVertical
 } from 'lucide-react';
 import { TextElement } from '../MemeGenerator';
 
@@ -17,16 +19,41 @@ interface LayersPanelProps {
   onSelectText: (id: string | null) => void;
   onUpdateText: (id: string, updates: Partial<TextElement>) => void;
   onDeleteText: () => void;
+  onReorderLayers: (fromIndex: number, toIndex: number) => void;
 }
 
 export const LayersPanel = ({ 
   textElements, 
   selectedTextId, 
   onSelectText, 
-  onUpdateText,
-  onDeleteText 
+  onUpdateText, 
+  onDeleteText,
+  onReorderLayers
 }: LayersPanelProps) => {
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const sortedElements = [...textElements].sort((a, b) => b.zIndex - a.zIndex);
+
+  const handleDragStart = (e: DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== dropIndex) {
+      onReorderLayers(draggedIndex, dropIndex);
+    }
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
 
   const moveLayer = (id: string, direction: 'up' | 'down') => {
     const element = textElements.find(el => el.id === id);
@@ -64,9 +91,14 @@ export const LayersPanel = ({
           </div>
         ) : (
           <div className="space-y-2">
-            {sortedElements.map((element) => (
+            {sortedElements.map((element, index) => (
               <div
                 key={element.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
                 onClick={() => onSelectText(element.id)}
                 className={`
                   p-3 rounded-lg border cursor-pointer transition-all
@@ -74,10 +106,12 @@ export const LayersPanel = ({
                     ? 'border-primary bg-primary/10' 
                     : 'border-border hover:border-primary/50'
                   }
+                  ${draggedIndex === index ? 'opacity-50' : ''}
                 `}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 drag-handle" />
                     <Type className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                     <span className="truncate text-sm font-medium">
                       {element.content || 'Empty text'}
