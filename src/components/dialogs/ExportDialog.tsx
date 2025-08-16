@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Card } from '@/components/ui/card';
@@ -19,6 +20,170 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
   const [quality, setQuality] = useState(0.9);
   const [scale, setScale] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
+  const [filename, setFilename] = useState('');
+
+  // Generate default filename based on original image name
+  useEffect(() => {
+    if (canvasState.backgroundImageFileName) {
+      // Remove extension from original filename and add _meme suffix
+      const nameWithoutExt = canvasState.backgroundImageFileName.replace(/\.[^/.]+$/, '');
+      setFilename(`${nameWithoutExt}_meme`);
+    } else {
+      setFilename('meme');
+    }
+  }, [canvasState.backgroundImageFileName]);
+
+  // Helper function to compute line width with letter spacing
+  const computeLineWidth = (ctx: CanvasRenderingContext2D, text: string, letterSpacing: number) => {
+    if (letterSpacing === 0) return ctx.measureText(text).width;
+    let width = 0;
+    for (let i = 0; i < text.length; i++) {
+      width += ctx.measureText(text[i]).width + letterSpacing;
+    }
+    return width;
+  };
+
+  // Helper function to wrap text to fit within width
+  const wrapTextToWidth = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number, letterSpacing: number) => {
+    const paragraphs = text.split('\n');
+    const lines: string[] = [];
+    for (const para of paragraphs) {
+      const words = para.split(' ');
+      let current = '';
+      for (let i = 0; i < words.length; i++) {
+        const attempt = current ? current + ' ' + words[i] : words[i];
+        const attemptWidth = computeLineWidth(ctx, attempt, letterSpacing);
+        if (attemptWidth <= maxWidth || current.length === 0) {
+          current = attempt;
+        } else {
+          lines.push(current);
+          current = words[i];
+        }
+      }
+      lines.push(current);
+    }
+    return lines;
+  };
+
+  // Helper function to draw text elements without selection indicators
+  const drawCleanTextElements = (ctx: CanvasRenderingContext2D) => {
+    const sortedElements = [...canvasState.textElements].sort((a, b) => a.zIndex - b.zIndex);
+
+    sortedElements.forEach((element) => {
+      if (element.opacity === 0) return;
+
+      ctx.save();
+      ctx.globalAlpha = element.opacity;
+
+      const centerX = element.x + element.width / 2;
+      const centerY = element.y + element.height / 2;
+      
+      ctx.translate(centerX, centerY);
+      ctx.rotate((element.rotation * Math.PI) / 180);
+      ctx.translate(-centerX, -centerY);
+
+      if (element.skewX || element.skewY) {
+        const skewXRad = (element.skewX || 0) * Math.PI / 180;
+        const skewYRad = (element.skewY || 0) * Math.PI / 180;
+        ctx.transform(1, Math.tan(skewYRad), Math.tan(skewXRad), 1, 0, 0);
+      }
+
+      ctx.font = `${element.fontWeight} ${element.fontSize}px ${element.fontFamily}`;
+      ctx.textAlign = element.textAlign;
+      ctx.textBaseline = 'middle';
+      
+      let textX = element.x;
+      if (element.textAlign === 'center') {
+        textX = element.x + element.width / 2;
+      } else if (element.textAlign === 'right') {
+        textX = element.x + element.width;
+      }
+      const textY = element.y + element.height / 2;
+
+      // Proper text wrapping using the same logic as CanvasArea
+      const letterSpacing = element.letterSpacing || 0;
+      const lines = wrapTextToWidth(ctx, element.content, element.width, letterSpacing);
+      const lineHeight = (element.lineHeight || 1.2) * element.fontSize;
+      
+      const renderTextLine = (line: string, x: number, y: number, renderFn: (text: string, x: number, y: number) => void) => {
+        if (letterSpacing !== 0) {
+          let currentX = x;
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            renderFn(char, currentX, y);
+            currentX += ctx.measureText(char).width + letterSpacing;
+          }
+        } else {
+          renderFn(line, x, y);
+        }
+      };
+      
+      lines.forEach((line, index) => {
+        const lineY = textY + (index - (lines.length - 1) / 2) * lineHeight;
+        
+        // Render shadow first (behind everything)
+        if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0 || (element.shadowSize && element.shadowSize > 0)) {
+          ctx.save();
+          ctx.shadowColor = element.shadowColor;
+          ctx.shadowBlur = element.shadowBlur;
+          ctx.shadowOffsetX = element.shadowOffsetX;
+          ctx.shadowOffsetY = element.shadowOffsetY;
+          
+          // Apply shadow size scaling
+          const shadowSize = element.shadowSize || 1;
+          if (shadowSize !== 1) {
+            ctx.scale(shadowSize, shadowSize);
+            const scaledX = textX / shadowSize;
+            const scaledY = lineY / shadowSize;
+            
+            // Draw shadow with stroke if stroke exists
+            if (element.strokeWidth > 0) {
+              ctx.strokeStyle = element.shadowColor;
+              ctx.lineWidth = element.strokeWidth / shadowSize;
+              ctx.lineJoin = 'round';
+              ctx.miterLimit = 2;
+              renderTextLine(line, scaledX, scaledY, (text, x, y) => ctx.strokeText(text, x, y));
+            }
+            
+            // Draw shadow fill
+            ctx.fillStyle = element.shadowColor;
+            renderTextLine(line, scaledX, scaledY, (text, x, y) => ctx.fillText(text, x, y));
+          } else {
+            // Draw shadow with stroke if stroke exists
+            if (element.strokeWidth > 0) {
+              ctx.strokeStyle = element.shadowColor;
+              ctx.lineWidth = element.strokeWidth;
+              ctx.lineJoin = 'round';
+              ctx.miterLimit = 2;
+              renderTextLine(line, textX, lineY, (text, x, y) => ctx.strokeText(text, x, y));
+            }
+            
+            // Draw shadow fill
+            ctx.fillStyle = element.shadowColor;
+            renderTextLine(line, textX, lineY, (text, x, y) => ctx.fillText(text, x, y));
+          }
+          ctx.restore();
+        }
+        
+        // Render main text stroke
+        if (element.strokeWidth > 0) {
+          ctx.strokeStyle = element.strokeColor;
+          ctx.lineWidth = element.strokeWidth;
+          ctx.lineJoin = 'round';
+          ctx.miterLimit = 2;
+          renderTextLine(line, textX, lineY, (text, x, y) => ctx.strokeText(text, x, y));
+        }
+        
+        // Draw fill
+        ctx.fillStyle = element.color;
+        renderTextLine(line, textX, lineY, (text, x, y) => ctx.fillText(text, x, y));
+      });
+
+      // NOTE: We intentionally skip drawing selection indicators here
+
+      ctx.restore();
+    });
+  };
 
   const exportCanvas = async () => {
     if (!canvasRef.current) return;
@@ -38,9 +203,29 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
       // Scale the context
       exportCtx.scale(scale, scale);
 
-      // Copy the current canvas content
-      exportCtx.drawImage(canvasRef.current, 0, 0);
+      // Render clean canvas without selection indicators
+      if (canvasState.backgroundImage) {
+        const img = new Image();
+        img.onload = () => {
+          exportCtx.drawImage(img, 0, 0, canvasState.canvasWidth, canvasState.canvasHeight);
+          drawCleanTextElements(exportCtx);
+          downloadCanvas(exportCanvas);
+        };
+        img.src = canvasState.backgroundImage;
+      } else {
+        exportCtx.fillStyle = '#f8f9fa';
+        exportCtx.fillRect(0, 0, canvasState.canvasWidth, canvasState.canvasHeight);
+        drawCleanTextElements(exportCtx);
+        downloadCanvas(exportCanvas);
+      }
+    } catch (error) {
+      console.error('Export failed:', error);
+      setIsExporting(false);
+    }
+  };
 
+  const downloadCanvas = async (exportCanvas: HTMLCanvasElement) => {
+    try {
       // Convert to blob
       const blob = await new Promise<Blob | null>((resolve) => {
         exportCanvas.toBlob(resolve, `image/${format}`, format === 'jpeg' ? quality : undefined);
@@ -51,14 +236,14 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `meme.${format}`;
+        a.download = `${filename}.${format}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
     } catch (error) {
-      console.error('Export failed:', error);
+      console.error('Download failed:', error);
     } finally {
       setIsExporting(false);
       onClose();
@@ -74,11 +259,13 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
 
   const presetScales = [
     { value: 0.5, label: '50% (Small)', description: 'Social media stories' },
-    { value: 1, label: '100% (Original)', description: 'Standard resolution' },
+    { value: 1, label: '100% (Original)', description: 'Source image resolution' },
     { value: 1.5, label: '150% (Large)', description: 'High quality posts' },
     { value: 2, label: '200% (XL)', description: 'Print quality' },
     { value: 3, label: '300% (XXL)', description: 'Maximum quality' }
   ];
+
+  const selectedPreset = presetScales.find(preset => preset.value === scale) || presetScales[1];
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -91,6 +278,26 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Filename Input */}
+          <div className="space-y-2">
+            <Label htmlFor="filename" className="text-sm font-medium">Filename</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="filename"
+                value={filename}
+                onChange={(e) => setFilename(e.target.value)}
+                placeholder="Enter filename..."
+                className="flex-1"
+              />
+              <span className="text-sm text-muted-foreground">.{format}</span>
+            </div>
+            {canvasState.backgroundImageFileName && (
+              <p className="text-xs text-muted-foreground">
+                Original: {canvasState.backgroundImageFileName}
+              </p>
+            )}
+          </div>
+
           {/* Format Selection */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Format</Label>
@@ -123,32 +330,34 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
             </div>
           )}
 
-          {/* Scale Selection */}
-          <div className="space-y-3">
+          {/* Resolution Selection Dropdown */}
+          <div className="space-y-2">
             <Label className="text-sm font-medium">Resolution</Label>
-            <div className="grid grid-cols-1 gap-2">
-              {presetScales.map((preset) => (
-                <Card
-                  key={preset.value}
-                  className={`p-3 cursor-pointer transition-all ${
-                    scale === preset.value 
-                      ? 'border-primary bg-primary/10' 
-                      : 'hover:border-primary/50'
-                  }`}
-                  onClick={() => setScale(preset.value)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-sm">{preset.label}</div>
-                      <div className="text-xs text-muted-foreground">{preset.description}</div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {Math.round(canvasState.canvasWidth * preset.value)} × {Math.round(canvasState.canvasHeight * preset.value)}
-                    </div>
+            <Select value={scale.toString()} onValueChange={(value) => setScale(parseFloat(value))}>
+              <SelectTrigger>
+                <SelectValue>
+                  <div className="flex items-center justify-between w-full">
+                    <span>{selectedPreset.label}</span>
+                    <span className="text-xs text-muted-foreground ml-2">
+                      {Math.round(canvasState.canvasWidth * scale)} × {Math.round(canvasState.canvasHeight * scale)}
+                    </span>
                   </div>
-                </Card>
-              ))}
-            </div>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {presetScales.map((preset) => (
+                  <SelectItem key={preset.value} value={preset.value.toString()}>
+                    <div className="flex flex-col">
+                      <div className="font-medium">{preset.label}</div>
+                      <div className="text-xs text-muted-foreground">{preset.description}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {Math.round(canvasState.canvasWidth * preset.value)} × {Math.round(canvasState.canvasHeight * preset.value)}
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Export Info */}

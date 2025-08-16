@@ -23,6 +23,7 @@ export const ImagePanel = ({ canvasState, updateCanvasState }: ImagePanelProps) 
         img.onload = () => {
           updateCanvasState({
             backgroundImage: e.target?.result as string,
+            backgroundImageFileName: file.name,
             canvasWidth: img.width,
             canvasHeight: img.height
           });
@@ -40,6 +41,7 @@ export const ImagePanel = ({ canvasState, updateCanvasState }: ImagePanelProps) 
   const removeImage = () => {
     updateCanvasState({
       backgroundImage: null,
+      backgroundImageFileName: null,
       canvasWidth: 800,
       canvasHeight: 600
     });
@@ -48,7 +50,7 @@ export const ImagePanel = ({ canvasState, updateCanvasState }: ImagePanelProps) 
   return (
     <div className="p-4 space-y-4">
       <Card className="p-4 space-y-4">
-        <h3 className="font-semibold text-lg">Background Image</h3>
+        <h3 className="font-semibold text-sm" style={{fontFamily: 'Sora, sans-serif'}}>Background Image</h3>
         
         <input
           ref={fileInputRef}
@@ -103,7 +105,7 @@ export const ImagePanel = ({ canvasState, updateCanvasState }: ImagePanelProps) 
       </Card>
 
       <Card className="p-4 space-y-4">
-        <h3 className="font-semibold">Canvas Size</h3>
+        <h3 className="font-semibold text-sm" style={{fontFamily: 'Sora, sans-serif'}}>Canvas Size</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label htmlFor="width" className="text-sm font-medium">
@@ -119,7 +121,7 @@ export const ImagePanel = ({ canvasState, updateCanvasState }: ImagePanelProps) 
       </Card>
 
       <Card className="p-4 space-y-4">
-        <h3 className="font-semibold">Zoom</h3>
+        <h3 className="font-semibold text-sm" style={{fontFamily: 'Sora, sans-serif'}}>Zoom</h3>
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span>25%</span>

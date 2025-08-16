@@ -77,7 +77,7 @@ export const LayersPanel = ({
     <div className="p-4 space-y-4">
       <Card className="p-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-lg">Layers</h3>
+          <h3 className="font-semibold text-sm" style={{fontFamily: 'Sora, sans-serif'}}>Layers</h3>
           <Badge variant="secondary">
             {textElements.length} text {textElements.length === 1 ? 'layer' : 'layers'}
           </Badge>

@@ -2,16 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { ImagePanel } from './panels/ImagePanel';
-import { TextPanel } from './panels/TextPanel';
+
+import { TextAndLayersPanel } from './panels/TextAndLayersPanel';
 import { StylePanel } from './panels/StylePanel';
-import { LayersPanel } from './panels/LayersPanel';
-import { CanvasArea } from './canvas/CanvasArea';
+import { FabricCanvas } from './canvas/FabricCanvas';
 import { Toolbar } from './toolbar/Toolbar';
 import { ExportDialog } from './dialogs/ExportDialog';
 import { 
   Image, 
-  Type, 
   Palette, 
   Layers, 
   Download,
@@ -20,6 +18,7 @@ import {
   Copy,
   Trash2
 } from 'lucide-react';
+import { GENERATED_STYLES } from '../styles.generated';
 
 export interface TextElement {
   id: string;
@@ -41,40 +40,72 @@ export interface TextElement {
   selected: boolean;
   shadowColor: string;
   shadowBlur: number;
+  shadowSize: number;
   shadowOffsetX: number;
   shadowOffsetY: number;
   lineHeight: number;
   letterSpacing: number;
   skewX: number;
   skewY: number;
+  curvature: number;
+}
+
+export interface SavedTextStyle {
+  id: string;
+  name: string;
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: string;
+  color: string;
+  strokeColor: string;
+  strokeWidth: number;
+  textAlign: 'left' | 'center' | 'right';
+  shadowColor: string;
+  shadowBlur: number;
+  shadowSize: number;
+  shadowOffsetX: number;
+  shadowOffsetY: number;
+  lineHeight: number;
+  letterSpacing: number;
+  skewX: number;
+  skewY: number;
+  curvature: number;
+  createdAt: string;
 }
 
 export interface CanvasState {
   backgroundImage: string | null;
+  backgroundImageFileName: string | null;
   textElements: TextElement[];
   canvasWidth: number;
   canvasHeight: number;
   zoom: number;
   snapToGrid: boolean;
+  gridVisible: boolean;
   gridSize: number;
 }
 
 export const MemeGenerator = () => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
     backgroundImage: null,
+    backgroundImageFileName: null,
     textElements: [],
     canvasWidth: 800,
     canvasHeight: 600,
     zoom: 1,
     snapToGrid: false,
-    gridSize: 20
+    gridVisible: false,
+    gridSize: 60
   });
 
-  const [selectedPanel, setSelectedPanel] = useState<string>('image');
+
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [history, setHistory] = useState<CanvasState[]>([canvasState]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  
+  // Saved styles state
+  const [savedStyles, setSavedStyles] = useState<SavedTextStyle[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -108,14 +139,37 @@ export const MemeGenerator = () => {
   }, [history, historyIndex]);
 
   const addTextElement = useCallback(() => {
+    const fontSize = 48;
+    const lineHeight = 1.2;
+    
+    // Create a temporary canvas to measure text dimensions accurately
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return;
+    
+    tempCtx.font = `bold ${fontSize}px Arial`;
+    const textMetrics = tempCtx.measureText('Edit this text');
+    
+    // Calculate actual text dimensions with minimal padding
+    const textWidth = textMetrics.width;
+    const textHeight = fontSize * lineHeight;
+    
+    // Add minimal padding (just 4px on each side)
+    const estimatedWidth = Math.ceil(textWidth + 8);
+    const estimatedHeight = Math.ceil(textHeight + 8);
+    
+    const maxZ = canvasState.textElements.length > 0
+      ? Math.max(...canvasState.textElements.map(el => el.zIndex))
+      : 0;
+
     const newElement: TextElement = {
       id: `text-${Date.now()}`,
       content: 'Edit this text',
-      x: canvasState.canvasWidth / 2 - 100,
-      y: canvasState.canvasHeight / 2 - 25,
-      width: 200,
-      height: 50,
-      fontSize: 48,
+      x: canvasState.canvasWidth / 2 - estimatedWidth / 2,
+      y: canvasState.canvasHeight / 2 - estimatedHeight / 2,
+      width: estimatedWidth,
+      height: estimatedHeight,
+      fontSize: fontSize,
       fontFamily: 'Arial',
       fontWeight: 'bold',
       color: '#ffffff',
@@ -124,23 +178,24 @@ export const MemeGenerator = () => {
       textAlign: 'center',
       rotation: 0,
       opacity: 1,
-      zIndex: canvasState.textElements.length + 1,
+      zIndex: maxZ + 1,
       selected: false,
       shadowColor: '#000000',
       shadowBlur: 4,
+      shadowSize: 1,
       shadowOffsetX: 2,
       shadowOffsetY: 2,
-      lineHeight: 1.2,
+      lineHeight: lineHeight,
       letterSpacing: 0,
       skewX: 0,
-      skewY: 0
+      skewY: 0,
+      curvature: 0
     };
 
     updateCanvasState({
       textElements: [...canvasState.textElements, newElement]
     });
     setSelectedTextId(newElement.id);
-    setSelectedPanel('text');
   }, [canvasState, updateCanvasState]);
 
   const selectTextElement = useCallback((id: string | null) => {
@@ -155,9 +210,34 @@ export const MemeGenerator = () => {
 
   const updateTextElement = useCallback((id: string, updates: Partial<TextElement>) => {
     updateCanvasState({
-      textElements: canvasState.textElements.map(el =>
-        el.id === id ? { ...el, ...updates } : el
-      )
+      textElements: canvasState.textElements.map(el => {
+        if (el.id !== id) return el;
+
+        const updatedElement = { ...el, ...updates };
+
+        // Auto-scale the text box when font size or line height changes
+        if (updates.fontSize !== undefined || updates.lineHeight !== undefined) {
+          const nextFontSize = updates.fontSize ?? el.fontSize;
+          const nextLineHeight = updates.lineHeight ?? el.lineHeight;
+
+          // Create a temporary canvas to measure new text dimensions
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          if (tempCtx) {
+            tempCtx.font = `${el.fontWeight} ${nextFontSize}px ${el.fontFamily}`;
+            const textMetrics = tempCtx.measureText(el.content);
+            
+            // Calculate new dimensions with minimal padding
+            const newWidth = Math.ceil(textMetrics.width + 8);
+            const newHeight = Math.ceil(nextFontSize * nextLineHeight + 8);
+            
+            updatedElement.width = newWidth;
+            updatedElement.height = newHeight;
+          }
+        }
+
+        return updatedElement;
+      })
     });
   }, [canvasState.textElements, updateCanvasState]);
 
@@ -171,18 +251,19 @@ export const MemeGenerator = () => {
   }, [selectedTextId, canvasState.textElements, updateCanvasState]);
 
   const reorderLayers = useCallback((fromIndex: number, toIndex: number) => {
-    const sortedElements = [...canvasState.textElements].sort((a, b) => b.zIndex - a.zIndex);
-    const draggedElement = sortedElements[fromIndex];
-    const targetElement = sortedElements[toIndex];
-    
-    if (draggedElement && targetElement) {
-      const newZIndex = targetElement.zIndex;
-      updateCanvasState({
-        textElements: canvasState.textElements.map(el => 
-          el.id === draggedElement.id ? { ...el, zIndex: newZIndex } : el
-        )
-      });
-    }
+    // Sort by zIndex descending to treat index 0 as the top-most layer
+    const sorted = [...canvasState.textElements].sort((a, b) => b.zIndex - a.zIndex);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= sorted.length || toIndex >= sorted.length) return;
+
+    // Move the layer in this array
+    const [moved] = sorted.splice(fromIndex, 1);
+    sorted.splice(toIndex, 0, moved);
+
+    // Reassign zIndex to maintain strict ordering (top-most gets largest zIndex)
+    const topZ = Math.max(0, ...canvasState.textElements.map(el => el.zIndex));
+    const normalized = sorted.map((el, idx) => ({ ...el, zIndex: topZ - idx }));
+
+    updateCanvasState({ textElements: normalized });
   }, [canvasState.textElements, updateCanvasState]);
 
   const duplicateSelectedText = useCallback(() => {
@@ -203,6 +284,209 @@ export const MemeGenerator = () => {
       }
     }
   }, [selectedTextId, canvasState.textElements, updateCanvasState]);
+
+  // Alignment functions
+  const alignSelectedText = useCallback((alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+    if (!selectedTextId) return;
+    
+    const element = canvasState.textElements.find(el => el.id === selectedTextId);
+    if (!element) return;
+
+    let newX = element.x;
+    let newY = element.y;
+
+    switch (alignment) {
+      case 'left':
+        newX = 20; // 20px margin from left
+        break;
+      case 'center':
+        newX = (canvasState.canvasWidth - element.width) / 2;
+        break;
+      case 'right':
+        newX = canvasState.canvasWidth - element.width - 20; // 20px margin from right
+        break;
+      case 'top':
+        newY = 20; // 20px margin from top
+        break;
+      case 'middle':
+        newY = (canvasState.canvasHeight - element.height) / 2;
+        break;
+      case 'bottom':
+        newY = canvasState.canvasHeight - element.height - 20; // 20px margin from bottom
+        break;
+    }
+
+    updateTextElement(selectedTextId, { x: newX, y: newY });
+  }, [selectedTextId, canvasState.textElements, canvasState.canvasWidth, canvasState.canvasHeight, updateTextElement]);
+
+  // Keep text within canvas bounds when canvas size changes
+  const constrainTextToCanvas = useCallback(() => {
+    const margin = 0.2; // 20% margin of error for overlap
+    const updatedElements = canvasState.textElements.map(element => {
+      let newX = element.x;
+      let newY = element.y;
+
+      // Allow 20% overlap on each side
+      const leftBound = -element.width * margin;
+      const rightBound = canvasState.canvasWidth - element.width * (1 - margin);
+      const topBound = -element.height * margin;
+      const bottomBound = canvasState.canvasHeight - element.height * (1 - margin);
+
+      // Constrain X position
+      if (newX < leftBound) {
+        newX = leftBound;
+      } else if (newX > rightBound) {
+        newX = rightBound;
+      }
+
+      // Constrain Y position
+      if (newY < topBound) {
+        newY = topBound;
+      } else if (newY > bottomBound) {
+        newY = bottomBound;
+      }
+
+      return { ...element, x: newX, y: newY };
+    });
+
+    updateCanvasState({ textElements: updatedElements });
+  }, [canvasState.textElements, canvasState.canvasWidth, canvasState.canvasHeight, updateCanvasState]);
+
+  // Style management functions
+  const saveCurrentStyle = useCallback((name: string) => {
+    if (!selectedTextId) return;
+    
+    const element = canvasState.textElements.find(el => el.id === selectedTextId);
+    if (!element) return;
+
+    const newStyle: SavedTextStyle = {
+      id: `style-${Date.now()}`,
+      name,
+      fontSize: element.fontSize,
+      fontFamily: element.fontFamily,
+      fontWeight: element.fontWeight,
+      color: element.color,
+      strokeColor: element.strokeColor,
+      strokeWidth: element.strokeWidth,
+      textAlign: element.textAlign,
+      shadowColor: element.shadowColor,
+      shadowBlur: element.shadowBlur,
+      shadowSize: element.shadowSize,
+      shadowOffsetX: element.shadowOffsetX,
+      shadowOffsetY: element.shadowOffsetY,
+      lineHeight: element.lineHeight,
+      letterSpacing: element.letterSpacing,
+      skewX: element.skewX,
+      skewY: element.skewY,
+      curvature: element.curvature,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedStyles = [...savedStyles, newStyle];
+    setSavedStyles(updatedStyles);
+    localStorage.setItem('meme-generator-styles', JSON.stringify(updatedStyles));
+  }, [selectedTextId, canvasState.textElements, savedStyles]);
+
+  const applyStyle = useCallback((style: SavedTextStyle) => {
+    if (!selectedTextId) return;
+
+    updateTextElement(selectedTextId, {
+      fontSize: style.fontSize,
+      fontFamily: style.fontFamily,
+      fontWeight: style.fontWeight,
+      color: style.color,
+      strokeColor: style.strokeColor,
+      strokeWidth: style.strokeWidth,
+      textAlign: style.textAlign,
+      shadowColor: style.shadowColor,
+      shadowBlur: style.shadowBlur,
+      shadowSize: style.shadowSize,
+      shadowOffsetX: style.shadowOffsetX,
+      shadowOffsetY: style.shadowOffsetY,
+      lineHeight: style.lineHeight,
+      letterSpacing: style.letterSpacing,
+      skewX: style.skewX,
+      skewY: style.skewY,
+      curvature: style.curvature
+    });
+  }, [selectedTextId, updateTextElement]);
+
+  const deleteStyle = useCallback((styleId: string) => {
+    const updatedStyles = savedStyles.filter(style => style.id !== styleId);
+    setSavedStyles(updatedStyles);
+    localStorage.setItem('meme-generator-styles', JSON.stringify(updatedStyles));
+  }, [savedStyles]);
+
+  const renameStyle = useCallback((styleId: string, newName: string) => {
+    const updatedStyles = savedStyles.map(style => 
+      style.id === styleId ? { ...style, name: newName } : style
+    );
+    setSavedStyles(updatedStyles);
+    localStorage.setItem('meme-generator-styles', JSON.stringify(updatedStyles));
+  }, [savedStyles]);
+
+  // Load saved styles from both localStorage and generated file on mount
+  useEffect(() => {
+    const combinedStyles = [...GENERATED_STYLES]; // Start with codebase styles
+    
+    // Add localStorage styles
+    const savedStylesData = localStorage.getItem('meme-generator-styles');
+    if (savedStylesData) {
+      try {
+        const localStyles = JSON.parse(savedStylesData);
+        if (Array.isArray(localStyles)) {
+          combinedStyles.push(...localStyles);
+        }
+      } catch (error) {
+        console.error('Failed to load localStorage styles:', error);
+      }
+    }
+    
+    setSavedStyles(combinedStyles);
+  }, []);
+
+  // Constrain text to canvas when canvas size changes
+  useEffect(() => {
+    if (canvasState.textElements.length > 0) {
+      const margin = 0.2; // 20% margin of error for overlap
+      const updatedElements = canvasState.textElements.map(element => {
+        let newX = element.x;
+        let newY = element.y;
+
+        // Allow 20% overlap on each side
+        const leftBound = -element.width * margin;
+        const rightBound = canvasState.canvasWidth - element.width * (1 - margin);
+        const topBound = -element.height * margin;
+        const bottomBound = canvasState.canvasHeight - element.height * (1 - margin);
+
+        // Constrain X position
+        if (newX < leftBound) {
+          newX = leftBound;
+        } else if (newX > rightBound) {
+          newX = rightBound;
+        }
+
+        // Constrain Y position
+        if (newY < topBound) {
+          newY = topBound;
+        } else if (newY > bottomBound) {
+          newY = bottomBound;
+        }
+
+        return { ...element, x: newX, y: newY };
+      });
+
+      // Only update if positions actually changed
+      const hasChanges = updatedElements.some((updated, index) => {
+        const original = canvasState.textElements[index];
+        return updated.x !== original.x || updated.y !== original.y;
+      });
+
+      if (hasChanges) {
+        updateCanvasState({ textElements: updatedElements });
+      }
+    }
+  }, [canvasState.canvasWidth, canvasState.canvasHeight]); // Only trigger on canvas size changes
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -234,12 +518,7 @@ export const MemeGenerator = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo, duplicateSelectedText, deleteSelectedText]);
 
-  const panels = [
-    { id: 'image', icon: Image, label: 'Image' },
-    { id: 'text', icon: Type, label: 'Text' },
-    { id: 'style', icon: Palette, label: 'Style' },
-    { id: 'layers', icon: Layers, label: 'Layers' }
-  ];
+
 
   const selectedElement = canvasState.textElements.find(el => el.id === selectedTextId);
 
@@ -274,6 +553,65 @@ export const MemeGenerator = () => {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Image Upload */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => document.getElementById('image-upload')?.click()}
+              title="Upload Background Image"
+            >
+              <Image className="h-4 w-4" />
+            </Button>
+            <input
+              id="image-upload"
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                    const result = e.target?.result as string;
+                    const img = new window.Image();
+                    img.onload = () => {
+                      updateCanvasState({
+                        backgroundImage: result,
+                        backgroundImageFileName: file.name,
+                        canvasWidth: img.width,
+                        canvasHeight: img.height
+                      });
+                    };
+                    img.src = result;
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              className="hidden"
+            />
+            
+            {/* Zoom Controls */}
+            <Separator orientation="vertical" className="h-6" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => updateCanvasState({ zoom: Math.max(0.1, canvasState.zoom - 0.1) })}
+              title="Zoom Out"
+            >
+              <span className="text-xs font-medium">-</span>
+            </Button>
+            <span className="text-xs font-medium px-2 min-w-[3rem] text-center">
+              {Math.round(canvasState.zoom * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => updateCanvasState({ zoom: Math.min(5, canvasState.zoom + 0.1) })}
+              title="Zoom In"
+            >
+              <span className="text-xs font-medium">+</span>
+            </Button>
+            
+            <Separator orientation="vertical" className="h-6" />
             <Button
               variant="ghost"
               size="sm"
@@ -296,12 +634,43 @@ export const MemeGenerator = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => updateCanvasState({ snapToGrid: !canvasState.snapToGrid })}
-              className={canvasState.snapToGrid ? "bg-secondary" : ""}
-              title="Toggle Snap to Grid"
+              className={`px-4 ${canvasState.gridVisible ? "bg-secondary" : ""}`}
+              onClick={() => updateCanvasState({ gridVisible: !canvasState.gridVisible })}
+              title="Toggle Grid Overlay"
             >
               <span className="text-xs font-medium">Grid</span>
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`px-4 ${canvasState.snapToGrid ? "bg-secondary" : ""}`}
+              onClick={() => updateCanvasState({ snapToGrid: !canvasState.snapToGrid })}
+              title="Toggle Snap to Grid"
+            >
+              <span className="text-xs font-medium">Snap</span>
+            </Button>
+            
+            <Separator orientation="vertical" className="h-6" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-4 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => {
+                if (confirm('Are you sure you want to clear the entire canvas? This cannot be undone.')) {
+                  updateCanvasState({
+                    textElements: [],
+                    backgroundImage: null,
+                    backgroundImageFileName: null
+                  });
+                  setSelectedTextId(null);
+                }
+              }}
+              title="Clear entire canvas"
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Reset All
+            </Button>
+            
             <Button 
               onClick={() => setShowExportDialog(true)}
               className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
@@ -313,64 +682,37 @@ export const MemeGenerator = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex">
+      <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <aside className="w-80 bg-panel-bg border-r border-border flex flex-col">
-          {/* Panel Selector */}
+        <aside className="w-80 bg-panel-bg border-r border-border flex flex-col overflow-auto">
+          {/* Panel Header */}
           <div className="p-4 border-b border-border">
-            <div className="grid grid-cols-4 gap-1 bg-secondary rounded-lg p-1">
-              {panels.map(({ id, icon: Icon, label }) => (
-                <Button
-                  key={id}
-                  variant={selectedPanel === id ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setSelectedPanel(id)}
-                  className="flex flex-col gap-1 h-auto py-2"
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="text-xs">{label}</span>
-                </Button>
-              ))}
-            </div>
+            <h3 className="font-semibold text-sm flex items-center gap-2" style={{fontFamily: 'Sora, sans-serif'}}>
+              <Layers className="h-3 w-3" />
+              Text & Layers
+            </h3>
           </div>
 
           {/* Panel Content */}
           <div className="flex-1 overflow-y-auto">
-            {selectedPanel === 'image' && (
-              <ImagePanel
-                canvasState={canvasState}
-                updateCanvasState={updateCanvasState}
-              />
-            )}
-            {selectedPanel === 'text' && (
-              <TextPanel
-                selectedElement={selectedElement}
-                onAddText={addTextElement}
-                onUpdateText={updateTextElement}
-              />
-            )}
-            {selectedPanel === 'style' && (
-              <StylePanel
-                selectedElement={selectedElement}
-                onUpdateText={updateTextElement}
-              />
-            )}
-            {selectedPanel === 'layers' && (
-              <LayersPanel
-                textElements={canvasState.textElements}
-                selectedTextId={selectedTextId}
-                onSelectText={selectTextElement}
-                onUpdateText={updateTextElement}
-                onDeleteText={deleteSelectedText}
-                onReorderLayers={reorderLayers}
-              />
-            )}
+            <TextAndLayersPanel
+              textElements={canvasState.textElements}
+              selectedElement={selectedElement}
+              selectedTextId={selectedTextId}
+              onAddText={addTextElement}
+              onSelectText={selectTextElement}
+              onUpdateText={updateTextElement}
+              onDeleteText={deleteSelectedText}
+              onDuplicateText={duplicateSelectedText}
+              onReorderLayers={reorderLayers}
+              onAlignText={alignSelectedText}
+            />
           </div>
         </aside>
 
         {/* Canvas Area */}
-        <main className="flex-1 bg-canvas-bg">
-          <CanvasArea
+        <main className="flex-1 bg-canvas-bg overflow-hidden">
+          <FabricCanvas
             ref={canvasRef}
             canvasState={canvasState}
             onSelectText={selectTextElement}
@@ -378,6 +720,27 @@ export const MemeGenerator = () => {
             onUpdateCanvas={updateCanvasState}
           />
         </main>
+
+        {/* Right Sidebar - Style Panel */}
+        <aside className="w-80 bg-panel-bg border-l border-border overflow-auto">
+          <div className="p-4 border-b border-border">
+            <h3 className="font-semibold text-sm flex items-center gap-2" style={{fontFamily: 'Sora, sans-serif'}}>
+              <Palette className="h-3 w-3" />
+              Style
+            </h3>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <StylePanel
+              selectedElement={selectedElement}
+              onUpdateText={updateTextElement}
+              savedStyles={savedStyles}
+              onSaveStyle={saveCurrentStyle}
+              onApplyStyle={applyStyle}
+              onDeleteStyle={deleteStyle}
+              onRenameStyle={renameStyle}
+            />
+          </div>
+        </aside>
       </div>
 
       {/* Export Dialog */}

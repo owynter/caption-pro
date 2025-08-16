@@ -16,16 +16,10 @@ interface TextPanelProps {
 }
 
 const fonts = [
-  'Arial',
   'Helvetica',
-  'Times New Roman',
-  'Georgia',
-  'Verdana',
-  'Courier New',
-  'Impact',
-  'Comic Sans MS',
   'Trebuchet MS',
-  'Arial Black'
+  'Courier New',
+  'Impact'
 ];
 
 const fontWeights = [
@@ -60,7 +54,7 @@ export const TextPanel = ({ selectedElement, onAddText, onUpdateText }: TextPane
     <div className="p-4 space-y-4">
       <Card className="p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-lg">Text</h3>
+          <h3 className="font-semibold text-sm" style={{fontFamily: 'Sora, sans-serif'}}>Text</h3>
           <Button onClick={onAddText} size="sm">
             <Plus className="h-4 w-4 mr-2" />
             Add Text

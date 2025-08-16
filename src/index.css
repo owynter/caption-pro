@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Figtree:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -116,3 +118,21 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* --- Project custom fonts (OTF/TTF placed in public/fonts) --- */
+/* Example declarations. After you drop files into public/fonts, update names below. */
+@font-face {
+  font-family: "YourCustomFont";
+  src: url("/fonts/YourCustomFont-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "YourCustomFont";
+  src: url("/fonts/YourCustomFont-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+/* Add more weights/styles as needed. For OTF, use format("opentype"). */
