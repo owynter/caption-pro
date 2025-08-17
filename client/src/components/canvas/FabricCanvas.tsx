@@ -605,7 +605,6 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             <div ref={containerRef} className="max-w-full max-h-full">
               <canvas
                 ref={canvasRef}
-                className="border border-canvas-border bg-white block"
                 style={{
                   width: `${canvasState.canvasWidth * displayScale}px`,
                   height: `${canvasState.canvasHeight * displayScale}px`
