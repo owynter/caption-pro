@@ -200,17 +200,20 @@ export const MemeGenerator = () => {
 
   const selectTextElement = useCallback((id: string | null) => {
     setSelectedTextId(id);
-    updateCanvasState({
-      textElements: canvasState.textElements.map(el => ({
+    // Use functional update to avoid stale closure issues
+    updateCanvasState(prevState => ({
+      ...prevState,
+      textElements: prevState.textElements.map(el => ({
         ...el,
         selected: el.id === id
       }))
-    });
-  }, [canvasState.textElements, updateCanvasState]);
+    }));
+  }, [updateCanvasState]);
 
   const updateTextElement = useCallback((id: string, updates: Partial<TextElement>) => {
-    updateCanvasState({
-      textElements: canvasState.textElements.map(el => {
+    updateCanvasState(prevState => ({
+      ...prevState,
+      textElements: prevState.textElements.map(el => {
         if (el.id !== id) return el;
 
         const updatedElement = { ...el, ...updates };
@@ -238,52 +241,59 @@ export const MemeGenerator = () => {
 
         return updatedElement;
       })
-    });
-  }, [canvasState.textElements, updateCanvasState]);
+    }));
+  }, [updateCanvasState]);
 
   const deleteSelectedText = useCallback(() => {
     if (selectedTextId) {
-      updateCanvasState({
-        textElements: canvasState.textElements.filter(el => el.id !== selectedTextId)
-      });
+      updateCanvasState(prevState => ({
+        ...prevState,
+        textElements: prevState.textElements.filter(el => el.id !== selectedTextId)
+      }));
       setSelectedTextId(null);
     }
-  }, [selectedTextId, canvasState.textElements, updateCanvasState]);
+  }, [selectedTextId, updateCanvasState]);
 
   const reorderLayers = useCallback((fromIndex: number, toIndex: number) => {
-    // Sort by zIndex descending to treat index 0 as the top-most layer
-    const sorted = [...canvasState.textElements].sort((a, b) => b.zIndex - a.zIndex);
-    if (fromIndex < 0 || toIndex < 0 || fromIndex >= sorted.length || toIndex >= sorted.length) return;
+    updateCanvasState(prevState => {
+      // Sort by zIndex descending to treat index 0 as the top-most layer
+      const sorted = [...prevState.textElements].sort((a, b) => b.zIndex - a.zIndex);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= sorted.length || toIndex >= sorted.length) return prevState;
 
-    // Move the layer in this array
-    const [moved] = sorted.splice(fromIndex, 1);
-    sorted.splice(toIndex, 0, moved);
+      // Move the layer in this array
+      const [moved] = sorted.splice(fromIndex, 1);
+      sorted.splice(toIndex, 0, moved);
 
-    // Reassign zIndex to maintain strict ordering (top-most gets largest zIndex)
-    const topZ = Math.max(0, ...canvasState.textElements.map(el => el.zIndex));
-    const normalized = sorted.map((el, idx) => ({ ...el, zIndex: topZ - idx }));
+      // Reassign zIndex to maintain strict ordering (top-most gets largest zIndex)
+      const topZ = Math.max(0, ...prevState.textElements.map(el => el.zIndex));
+      const normalized = sorted.map((el, idx) => ({ ...el, zIndex: topZ - idx }));
 
-    updateCanvasState({ textElements: normalized });
-  }, [canvasState.textElements, updateCanvasState]);
+      return { ...prevState, textElements: normalized };
+    });
+  }, [updateCanvasState]);
 
   const duplicateSelectedText = useCallback(() => {
     if (selectedTextId) {
-      const element = canvasState.textElements.find(el => el.id === selectedTextId);
-      if (element) {
-        const newElement = {
-          ...element,
-          id: `text-${Date.now()}`,
-          x: element.x + 20,
-          y: element.y + 20,
-          zIndex: Math.max(...canvasState.textElements.map(el => el.zIndex)) + 1
-        };
-        updateCanvasState({
-          textElements: [...canvasState.textElements, newElement]
-        });
-        setSelectedTextId(newElement.id);
-      }
+      updateCanvasState(prevState => {
+        const element = prevState.textElements.find(el => el.id === selectedTextId);
+        if (element) {
+          const newElement = {
+            ...element,
+            id: `text-${Date.now()}`,
+            x: element.x + 20,
+            y: element.y + 20,
+            zIndex: Math.max(...prevState.textElements.map(el => el.zIndex)) + 1
+          };
+          setSelectedTextId(newElement.id);
+          return {
+            ...prevState,
+            textElements: [...prevState.textElements, newElement]
+          };
+        }
+        return prevState;
+      });
     }
-  }, [selectedTextId, canvasState.textElements, updateCanvasState]);
+  }, [selectedTextId, updateCanvasState]);
 
   // Alignment functions
   const alignSelectedText = useCallback((alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
