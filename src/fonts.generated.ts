@@ -102,3 +102,4 @@ export const GENERATED_FONTS: string[] = [
   "wash",
   "weird"
 ];
+
