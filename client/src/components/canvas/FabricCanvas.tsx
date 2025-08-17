@@ -169,7 +169,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         const fabric = await import('fabric');
         console.log('Fabric.js loaded:', fabric);
         
-        const canvas = new fabric.Canvas(canvasRef.current, {
+        const canvas = new fabric.Canvas(canvasRef.current!, {
           width: canvasState.canvasWidth,
           height: canvasState.canvasHeight,
           selection: false,
@@ -371,7 +371,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       }
       
       // Add new background
-      fabric.Image.fromURL(canvasState.backgroundImage, (img: any) => {
+      fabric.Image.fromURL(canvasState.backgroundImage, { crossOrigin: 'anonymous' }).then((img: any) => {
         img.set({
           left: 0,
           top: 0,
@@ -395,6 +395,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         canvas.sendToBack(img);
         canvas.renderAll();
         console.log('Background image added and scaled');
+      }).catch((err: any) => {
+        console.error('Failed to load background image:', err);
       });
     } catch (err) {
       console.error('Error adding background image:', err);
@@ -502,38 +504,6 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
     }
   }, [canvasState.textElements]);
 
-  // Re-render canvas when state changes (but not during initial setup)
-  useEffect(() => {
-    if (fabricCanvasRef.current && isInitialized) {
-      console.log('State changed, re-rendering canvas');
-      renderCanvas();
-    }
-  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized]);
-
-  // Update canvas size when dimensions change
-  useEffect(() => {
-    if (fabricCanvasRef.current) {
-      console.log('Updating canvas dimensions:', canvasState.canvasWidth, canvasState.canvasHeight);
-      fabricCanvasRef.current.setDimensions({
-        width: canvasState.canvasWidth,
-        height: canvasState.canvasHeight
-      });
-      fabricCanvasRef.current.renderAll();
-      
-      // Recompute display scale when canvas dimensions change
-      computeDisplayScale();
-    }
-  }, [canvasState.canvasWidth, canvasState.canvasHeight, computeDisplayScale]);
-
-  // Update zoom
-  useEffect(() => {
-    if (fabricCanvasRef.current) {
-      console.log('Updating zoom:', canvasState.zoom);
-      fabricCanvasRef.current.setZoom(canvasState.zoom);
-      fabricCanvasRef.current.renderAll();
-    }
-  }, [canvasState.zoom]);
-
   // Compute display scale for responsive sizing
   const computeDisplayScale = useCallback(() => {
     const wrapper = wrapperRef.current;
@@ -571,6 +541,38 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
     if (!Number.isFinite(next) || next <= 0) return;
     setDisplayScale(next);
   }, [canvasState.canvasWidth, canvasState.canvasHeight]);
+
+  // Re-render canvas when state changes (but not during initial setup)
+  useEffect(() => {
+    if (fabricCanvasRef.current && isInitialized) {
+      console.log('State changed, re-rendering canvas');
+      renderCanvas();
+    }
+  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized]);
+
+  // Update canvas size when dimensions change
+  useEffect(() => {
+    if (fabricCanvasRef.current) {
+      console.log('Updating canvas dimensions:', canvasState.canvasWidth, canvasState.canvasHeight);
+      fabricCanvasRef.current.setDimensions({
+        width: canvasState.canvasWidth,
+        height: canvasState.canvasHeight
+      });
+      fabricCanvasRef.current.renderAll();
+      
+      // Recompute display scale when canvas dimensions change
+      computeDisplayScale();
+    }
+  }, [canvasState.canvasWidth, canvasState.canvasHeight, computeDisplayScale]);
+
+  // Update zoom
+  useEffect(() => {
+    if (fabricCanvasRef.current) {
+      console.log('Updating zoom:', canvasState.zoom);
+      fabricCanvasRef.current.setZoom(canvasState.zoom);
+      fabricCanvasRef.current.renderAll();
+    }
+  }, [canvasState.zoom]);
 
   // Recompute scale on resize
   useEffect(() => {
