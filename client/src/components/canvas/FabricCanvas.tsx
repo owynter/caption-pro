@@ -1,4 +1,3 @@
-
 import { forwardRef, useEffect, useRef, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { ImageIcon } from 'lucide-react';
@@ -21,7 +20,7 @@ interface FabricCanvasProps {
   onUpdateCanvas: (updates: Partial<FabricCanvasProps['canvasState']>) => void;
 }
 
-export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({ 
+export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   canvasState,
   onSelectText,
   onUpdateText,
@@ -66,14 +65,14 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'copy';
     setIsDragOver(false);
-    
+
     console.log('Drop event triggered', e.dataTransfer.types);
-    
+
     const files = Array.from(e.dataTransfer.files);
     console.log('Files dropped:', files);
-    
+
     const imageFile = files.find(file => file.type.startsWith('image/'));
-    
+
     if (imageFile) {
       console.log('Processing image file:', imageFile.name);
       const reader = new FileReader();
@@ -100,7 +99,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       reader.readAsDataURL(imageFile);
       return;
     }
-    
+
     // Handle image URLs (when dragging from another tab/window)
     const imageUrl = e.dataTransfer.getData('text/html');
     if (imageUrl) {
@@ -126,7 +125,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         return;
       }
     }
-    
+
     // Handle plain text URLs
     const textUrl = e.dataTransfer.getData('text/plain');
     if (textUrl && (textUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) || textUrl.startsWith('data:image/'))) {
@@ -147,7 +146,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       };
       img.src = textUrl;
     }
-    
+
     console.log('No valid image found in drop data');
   }, [onUpdateCanvas]);
 
@@ -168,13 +167,14 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         console.log('Loading Fabric.js...');
         const fabric = await import('fabric');
         console.log('Fabric.js loaded:', fabric);
-        
+
         const canvas = new fabric.Canvas(canvasRef.current!, {
           width: canvasState.canvasWidth,
           height: canvasState.canvasHeight,
-          selection: false,
+          selection: true,
           preserveObjectStacking: true,
           backgroundColor: '#ffffff',
+          enableRetinaScaling: false,
         });
 
         console.log('Fabric.js canvas created with dimensions:', {
@@ -182,6 +182,21 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           height: canvasState.canvasHeight
         });
         fabricCanvasRef.current = canvas;
+
+        // Apply initial responsive sizing to both canvases
+        const upperCanvas = canvas.upperCanvasEl;
+        const lowerCanvas = canvas.lowerCanvasEl;
+
+        if (upperCanvas && lowerCanvas) {
+          const initialDisplayScale = 1; // We'll compute this properly in the effect
+          const displayWidth = canvasState.canvasWidth * initialDisplayScale;
+          const displayHeight = canvasState.canvasHeight * initialDisplayScale;
+
+          upperCanvas.style.width = `${displayWidth}px`;
+          upperCanvas.style.height = `${displayHeight}px`;
+          lowerCanvas.style.width = `${displayWidth}px`;
+          lowerCanvas.style.height = `${displayHeight}px`;
+        }
 
         // Set up canvas event handlers
         canvas.on('selection:created', (e: any) => {
@@ -222,10 +237,10 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         });
 
         canvas.renderAll();
-        
+
         // Mark as initialized
         setIsInitialized(true);
-        
+
         setTimeout(() => {
           console.log('Initialization complete - test objects should be visible');
         }, 100);
@@ -254,7 +269,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
     try {
       const fabric = await import('fabric');
       const canvas = fabricCanvasRef.current;
-      
+
       console.log('Rendering canvas with state:', {
         backgroundImage: canvasState.backgroundImage ? 'Present' : 'None',
         textElements: canvasState.textElements.length,
@@ -263,52 +278,52 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         canvasWidth: canvasState.canvasWidth,
         canvasHeight: canvasState.canvasHeight
       });
-      
+
       // Get existing objects and categorize them
       const allObjects = canvas.getObjects();
       const gridObjects = allObjects.filter((obj: any) => obj.data && obj.data.isGrid);
       const backgroundObjects = allObjects.filter((obj: any) => obj.data && obj.data.isBackground);
       const textObjects = allObjects.filter((obj: any) => obj.data && obj.data.id);
-      
+
       // Only remove objects that need to be updated
-      
+
       // Remove old grid if grid visibility changed
       if (!canvasState.gridVisible && gridObjects.length > 0) {
         gridObjects.forEach((obj: any) => canvas.remove(obj));
       }
-      
+
       // Remove background if changed
       if (!canvasState.backgroundImage && backgroundObjects.length > 0) {
         backgroundObjects.forEach((obj: any) => canvas.remove(obj));
       }
-      
+
       // Update text objects - only remove/add if the text elements have actually changed
       const existingTextIds = textObjects.map((obj: any) => obj.data.id);
       const newTextIds = canvasState.textElements.map(el => el.id);
-      
+
       // Remove text objects that no longer exist
       textObjects.forEach((obj: any) => {
         if (!newTextIds.includes(obj.data.id)) {
           canvas.remove(obj);
         }
       });
-      
+
       // Draw grid if visible
       if (canvasState.gridVisible && gridObjects.length === 0) {
         await drawGrid();
       }
-      
+
       // Add background image if not present
       if (canvasState.backgroundImage && backgroundObjects.length === 0) {
         await addBackgroundImage();
       }
-      
+
       // Add/update text elements
       await addTextElements();
-      
+
       canvas.renderAll();
       console.log('Canvas rendered with', canvasState.textElements.length, 'text elements');
-      
+
     } catch (err) {
       console.error('Error rendering canvas:', err);
     }
@@ -317,16 +332,16 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   // Draw grid overlay
   const drawGrid = useCallback(async () => {
     if (!fabricCanvasRef.current) return;
-    
+
     try {
       const fabric = await import('fabric');
       const canvas = fabricCanvasRef.current;
       const gridSize = canvasState.gridSize;
-      
+
       // Remove existing grid lines
       const existingGrid = canvas.getObjects().filter((obj: any) => obj.data && obj.data.isGrid);
       existingGrid.forEach((obj: any) => canvas.remove(obj));
-      
+
       // Create new grid lines
       for (let x = 0; x <= canvasState.canvasWidth; x += gridSize) {
         const line = new fabric.Line([x, 0, x, canvasState.canvasHeight], {
@@ -338,7 +353,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         });
         canvas.add(line);
       }
-      
+
       for (let y = 0; y <= canvasState.canvasHeight; y += gridSize) {
         const line = new fabric.Line([0, y, canvasState.canvasWidth, y], {
           stroke: '#666666',
@@ -349,7 +364,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         });
         canvas.add(line);
       }
-      
+
       console.log('Grid drawn with size:', gridSize);
     } catch (err) {
       console.error('Error drawing grid:', err);
@@ -359,17 +374,17 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   // Add background image
   const addBackgroundImage = useCallback(async () => {
     if (!fabricCanvasRef.current || !canvasState.backgroundImage) return;
-    
+
     try {
       const fabric = await import('fabric');
       const canvas = fabricCanvasRef.current;
-      
+
       // Remove existing background
       const existingBg = canvas.getObjects().find((obj: any) => obj.data && obj.data.isBackground);
       if (existingBg) {
         canvas.remove(existingBg);
       }
-      
+
       // Add new background
       fabric.Image.fromURL(canvasState.backgroundImage, { crossOrigin: 'anonymous' }).then((img: any) => {
         img.set({
@@ -379,18 +394,18 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           evented: false,
           data: { isBackground: true }
         });
-        
+
         // Scale image to fit canvas
         const scaleX = canvasState.canvasWidth / img.width;
         const scaleY = canvasState.canvasHeight / img.height;
         const scale = Math.min(scaleX, scaleY);
-        
+
         img.scale(scale);
         img.set({
           left: (canvasState.canvasWidth - img.width * scale) / 2,
           top: (canvasState.canvasHeight - img.height * scale) / 2
         });
-        
+
         canvas.add(img);
         canvas.sendToBack(img);
         canvas.renderAll();
@@ -406,26 +421,26 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   // Add text elements
   const addTextElements = useCallback(async () => {
     if (!fabricCanvasRef.current) return;
-    
+
     try {
       const fabric = await import('fabric');
       const canvas = fabricCanvasRef.current;
-      
+
       // Get existing text objects
-      const existingTextObjects = canvas.getObjects().filter((obj: any) => 
+      const existingTextObjects = canvas.getObjects().filter((obj: any) =>
         obj.data && obj.data.id && !obj.data.isGrid && !obj.data.isBackground
       );
-      
+
       // Create a map of existing objects by ID
       const existingMap = new Map();
       existingTextObjects.forEach((obj: any) => {
         existingMap.set(obj.data.id, obj);
       });
-      
+
       // Process each text element
       canvasState.textElements.forEach(element => {
         const existingObj = existingMap.get(element.id);
-        
+
         if (existingObj) {
           // Update existing object properties
           existingObj.set({
@@ -442,7 +457,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             angle: element.rotation,
             opacity: element.opacity
           });
-          
+
           // Update shadow
           if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
             existingObj.set({
@@ -456,7 +471,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           } else {
             existingObj.set({ shadow: null });
           }
-          
+
           // Remove from map so we know it's been processed
           existingMap.delete(element.id);
         } else {
@@ -476,7 +491,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             selectable: true,
             data: { id: element.id }
           });
-          
+
           // Apply advanced properties
           if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
             text.set({
@@ -488,16 +503,16 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               })
             });
           }
-          
+
           canvas.add(text);
         }
       });
-      
+
       // Remove any objects that are no longer in the state
       existingMap.forEach((obj) => {
         canvas.remove(obj);
       });
-      
+
       console.log('Updated', canvasState.textElements.length, 'text elements');
     } catch (err) {
       console.error('Error adding text elements:', err);
@@ -511,7 +526,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
 
     const rect = wrapper.getBoundingClientRect();
     const availableWidth = Math.max(wrapper.clientWidth - 32, 0);
-    
+
     let extraBottomPadding = 0;
     const parentEl = wrapper.parentElement as HTMLElement | null;
     if (parentEl) {
@@ -528,7 +543,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
 
     const availableHeight = Math.max(window.innerHeight - rect.top - extraBottomPadding, 0);
     const { canvasWidth, canvasHeight } = canvasState;
-    
+
     if (canvasWidth <= 0 || canvasHeight <= 0) {
       setDisplayScale(1);
       return;
@@ -537,7 +552,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
     const scaleX = availableWidth / canvasWidth;
     const scaleY = availableHeight / canvasHeight;
     const next = Math.min(scaleX, scaleY, 1);
-    
+
     if (!Number.isFinite(next) || next <= 0) return;
     setDisplayScale(next);
   }, [canvasState.canvasWidth, canvasState.canvasHeight]);
@@ -561,7 +576,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       fabricCanvasRef.current.renderAll();
     }
   }, [canvasState.canvasWidth, canvasState.canvasHeight]);
-  
+
   // Recompute display scale when canvas dimensions change
   useEffect(() => {
     computeDisplayScale();
@@ -583,18 +598,18 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         computeDisplayScale();
       }
     };
-    
+
     // Initial computation
     handleResize();
-    
+
     window.addEventListener('resize', handleResize);
-    
+
     let ro: ResizeObserver | null = null;
     if (wrapperRef.current && 'ResizeObserver' in window) {
       ro = new ResizeObserver(handleResize);
       ro.observe(wrapperRef.current);
     }
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
       if (ro) ro.disconnect();
@@ -617,8 +632,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           <div className="text-center text-red-600">
             <h3 className="text-lg font-semibold mb-2">Canvas Error</h3>
             <p className="text-sm">{error}</p>
-            <button 
-              onClick={() => window.location.reload()} 
+            <button
+              onClick={() => window.location.reload()}
               className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
             >
               Reload Page
@@ -631,8 +646,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
 
   return (
     <div className="flex-1 p-4 bg-canvas-bg overflow-hidden">
-      <div 
-        ref={wrapperRef} 
+      <div
+        ref={wrapperRef}
         className="relative flex items-center justify-center w-full h-full max-w-full max-h-full"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
@@ -652,7 +667,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             </div>
           </Card>
         </div>
-        
+
         {/* Drop Zone Overlay */}
         {isDragOver && (
           <div className="absolute inset-0 bg-primary/20 border-2 border-dashed border-primary rounded-lg flex items-center justify-center z-10">
