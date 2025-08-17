@@ -220,9 +220,6 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           if (e.target && e.target.data && e.target.data.id) {
             const obj = e.target;
             
-            // Mark object as being modified to prevent removal during re-render
-            obj._isBeingModified = true;
-            
             const updates: Partial<TextElement> = {
               x: Math.round(obj.left || 0),
               y: Math.round(obj.top || 0),
@@ -237,12 +234,10 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               updates.rotation = obj.angle;
             }
 
-            onUpdateText(obj.data.id, updates);
-            
-            // Clear the modification flag after a short delay
+            // Use a timeout to defer state update and avoid immediate re-render
             setTimeout(() => {
-              obj._isBeingModified = false;
-            }, 100);
+              onUpdateText(obj.data.id, updates);
+            }, 0);
           }
         });
 
@@ -259,21 +254,18 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         canvas.on('object:moving', (e: any) => {
           if (e.target && e.target.data && e.target.data.id) {
             e.target._isBeingModified = true;
-            setIsModifying(true);
           }
         });
 
         canvas.on('object:scaling', (e: any) => {
           if (e.target && e.target.data && e.target.data.id) {
             e.target._isBeingModified = true;
-            setIsModifying(true);
           }
         });
 
         canvas.on('object:rotating', (e: any) => {
           if (e.target && e.target.data && e.target.data.id) {
             e.target._isBeingModified = true;
-            setIsModifying(true);
           }
         });
 
@@ -284,16 +276,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             obj._isBeingDragged = false;
             obj._isBeingScaled = false;
             obj._isBeingRotated = false;
-            // Also clear the modification flag after a delay
-            setTimeout(() => {
-              obj._isBeingModified = false;
-            }, 100);
+            obj._isBeingModified = false;
           });
-          
-          // Clear the global modification state after a delay
-          setTimeout(() => {
-            setIsModifying(false);
-          }, 150);
         });
 
         canvas.renderAll();
@@ -502,34 +486,50 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         const existingObj = existingMap.get(element.id);
 
         if (existingObj) {
-          // Update existing object properties
-          existingObj.set({
-            text: element.content,
-            left: element.x,
-            top: element.y,
-            fontSize: element.fontSize,
-            fontFamily: element.fontFamily,
-            fontWeight: element.fontWeight,
-            fill: element.color,
-            stroke: element.strokeColor,
-            strokeWidth: element.strokeWidth,
-            textAlign: element.textAlign,
-            angle: element.rotation,
-            opacity: element.opacity
-          });
+          // Only update properties if they've actually changed to avoid triggering events
+          const needsUpdate = 
+            existingObj.text !== element.content ||
+            Math.abs(existingObj.left - element.x) > 1 ||
+            Math.abs(existingObj.top - element.y) > 1 ||
+            existingObj.fontSize !== element.fontSize ||
+            existingObj.fontFamily !== element.fontFamily ||
+            existingObj.fontWeight !== element.fontWeight ||
+            existingObj.fill !== element.color ||
+            existingObj.stroke !== element.strokeColor ||
+            existingObj.strokeWidth !== element.strokeWidth ||
+            existingObj.textAlign !== element.textAlign ||
+            Math.abs(existingObj.angle - element.rotation) > 1 ||
+            existingObj.opacity !== element.opacity;
 
-          // Update shadow
-          if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
+          if (needsUpdate && !existingObj._isBeingModified) {
             existingObj.set({
-              shadow: new fabric.Shadow({
-                color: element.shadowColor,
-                blur: element.shadowBlur,
-                offsetX: element.shadowOffsetX,
-                offsetY: element.shadowOffsetY
-              })
+              text: element.content,
+              left: element.x,
+              top: element.y,
+              fontSize: element.fontSize,
+              fontFamily: element.fontFamily,
+              fontWeight: element.fontWeight,
+              fill: element.color,
+              stroke: element.strokeColor,
+              strokeWidth: element.strokeWidth,
+              textAlign: element.textAlign,
+              angle: element.rotation,
+              opacity: element.opacity
             });
-          } else {
-            existingObj.set({ shadow: null });
+
+            // Update shadow
+            if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
+              existingObj.set({
+                shadow: new fabric.Shadow({
+                  color: element.shadowColor,
+                  blur: element.shadowBlur,
+                  offsetX: element.shadowOffsetX,
+                  offsetY: element.shadowOffsetY
+                })
+              });
+            } else {
+              existingObj.set({ shadow: null });
+            }
           }
 
           // Remove from map so we know it's been processed
@@ -568,9 +568,11 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         }
       });
 
-      // Remove any objects that are no longer in the state
+      // Remove any objects that are no longer in the state (but don't remove objects being modified)
       existingMap.forEach((obj) => {
-        canvas.remove(obj);
+        if (!obj._isBeingModified) {
+          canvas.remove(obj);
+        }
       });
 
       console.log('Updated', canvasState.textElements.length, 'text elements');
@@ -617,13 +619,13 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
     setDisplayScale(next);
   }, [canvasState.canvasWidth, canvasState.canvasHeight]);
 
-  // Re-render canvas when state changes (but not during initial setup or modifications)
+  // Re-render canvas when state changes (but not during initial setup)
   useEffect(() => {
-    if (fabricCanvasRef.current && isInitialized && !isModifying) {
+    if (fabricCanvasRef.current && isInitialized) {
       console.log('State changed, re-rendering canvas');
       renderCanvas();
     }
-  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized, isModifying]);
+  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized]);
 
   // Update canvas size when dimensions change
   useEffect(() => {
