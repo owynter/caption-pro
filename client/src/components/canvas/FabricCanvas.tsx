@@ -1,3 +1,4 @@
+
 import { forwardRef, useEffect, useRef, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { ImageIcon } from 'lucide-react';
@@ -62,6 +63,121 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Drag and drop handlers (moved before return statement)
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    if (!isDragOver) {
+      setIsDragOver(true);
+    }
+  }, [isDragOver]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(false);
+    
+    console.log('Drop event triggered', e.dataTransfer.types);
+    
+    const files = Array.from(e.dataTransfer.files);
+    console.log('Files dropped:', files);
+    
+    const imageFile = files.find(file => file.type.startsWith('image/'));
+    
+    if (imageFile) {
+      console.log('Processing image file:', imageFile.name);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        const img = new window.Image();
+        img.onload = () => {
+          console.log('Image loaded, dimensions:', img.width, 'x', img.height);
+          onUpdateCanvas({
+            backgroundImage: result,
+            backgroundImageFileName: imageFile.name,
+            canvasWidth: img.width,
+            canvasHeight: img.height
+          });
+        };
+        img.onerror = (err) => {
+          console.error('Failed to load image:', err);
+        };
+        img.src = result;
+      };
+      reader.onerror = (err) => {
+        console.error('Failed to read file:', err);
+      };
+      reader.readAsDataURL(imageFile);
+      return;
+    }
+    
+    // Handle image URLs (when dragging from another tab/window)
+    const imageUrl = e.dataTransfer.getData('text/html');
+    if (imageUrl) {
+      console.log('Processing HTML image:', imageUrl);
+      const imgMatch = imageUrl.match(/<img[^>]+src="([^"]+)"/);
+      if (imgMatch) {
+        const imgUrl = imgMatch[1];
+        const img = new window.Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          console.log('URL image loaded, dimensions:', img.width, 'x', img.height);
+          onUpdateCanvas({
+            backgroundImage: imgUrl,
+            backgroundImageFileName: 'dropped-image',
+            canvasWidth: img.width,
+            canvasHeight: img.height
+          });
+        };
+        img.onerror = (err) => {
+          console.error('Failed to load dropped image URL:', err);
+        };
+        img.src = imgUrl;
+        return;
+      }
+    }
+    
+    // Handle plain text URLs
+    const textUrl = e.dataTransfer.getData('text/plain');
+    if (textUrl && (textUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) || textUrl.startsWith('data:image/'))) {
+      console.log('Processing text URL:', textUrl);
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        console.log('Text URL image loaded, dimensions:', img.width, 'x', img.height);
+        onUpdateCanvas({
+          backgroundImage: textUrl,
+          backgroundImageFileName: 'dropped-image',
+          canvasWidth: img.width,
+          canvasHeight: img.height
+        });
+      };
+      img.onerror = (err) => {
+        console.error('Failed to load text URL image:', err);
+      };
+      img.src = textUrl;
+    }
+    
+    console.log('No valid image found in drop data');
+  }, [onUpdateCanvas]);
+
   // Initialize Fabric.js canvas
   useEffect(() => {
     if (!canvasRef.current) {
@@ -81,16 +197,16 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         console.log('Fabric.js loaded:', fabric);
         
         const canvas = new fabric.Canvas(canvasRef.current, {
-          width: 800,
-          height: 600,
+          width: canvasState.canvasWidth,
+          height: canvasState.canvasHeight,
           selection: false,
           preserveObjectStacking: true,
-          backgroundColor: '#f0f0f0', // Light gray background to make it visible
+          backgroundColor: '#ffffff',
         });
 
         console.log('Fabric.js canvas created with dimensions:', {
-          width: Math.max(canvasState.canvasWidth, 800),
-          height: Math.max(canvasState.canvasHeight, 600)
+          width: canvasState.canvasWidth,
+          height: canvasState.canvasHeight
         });
         fabricCanvasRef.current = canvas;
 
@@ -144,7 +260,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           fill: 'red',
           stroke: 'blue',
           strokeWidth: 3,
-          selectable: false,
+          selectable: true,
           data: { isTest: true }
         });
         
@@ -155,7 +271,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           fontSize: 24,
           fill: 'green',
           fontWeight: 'bold',
-          selectable: false,
+          selectable: true,
           data: { isTest: true }
         });
         
@@ -171,18 +287,12 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         canvas.renderAll();
         console.log('Canvas renderAll() called - test objects should now be visible');
         
-        // Mark as initialized so renderCanvas doesn't clear test objects immediately
+        // Mark as initialized
         setIsInitialized(true);
         
-        // Add a small delay to ensure test objects are fully rendered before any other operations
         setTimeout(() => {
           console.log('Initialization complete - test objects should be visible');
         }, 100);
-        
-        // IMPORTANT: Don't mix HTML5 Canvas API with Fabric.js!
-        // Fabric.js completely takes over the canvas element.
-        // Using getContext('2d') would conflict with Fabric.js rendering.
-        // The canvas element is managed entirely by Fabric.js now.
 
       } catch (err) {
         console.error('Error initializing Fabric.js canvas:', err);
@@ -226,14 +336,11 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       
       console.log('Preserving test objects:', testObjects.length);
       
-      // Clear existing objects
-      canvas.clear();
-      
-      // Re-add test objects immediately
-      testObjects.forEach((obj: any) => {
-        console.log('Re-adding test object:', obj.type, obj.data);
-        canvas.add(obj);
-      });
+      // Clear existing non-test objects
+      const nonTestObjects = allObjects.filter((obj: any) => 
+        !obj.data || obj.data.isTest !== true
+      );
+      nonTestObjects.forEach((obj: any) => canvas.remove(obj));
       
       // Draw grid if visible
       if (canvasState.gridVisible) {
@@ -351,9 +458,9 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       const fabric = await import('fabric');
       const canvas = fabricCanvasRef.current;
       
-      // Remove existing text objects (except grid and background)
+      // Remove existing text objects (except grid, background, and test objects)
       const existingText = canvas.getObjects().filter((obj: any) => 
-        obj.data && !obj.data.isGrid && !obj.data.isBackground
+        obj.data && !obj.data.isGrid && !obj.data.isBackground && !obj.data.isTest
       );
       existingText.forEach((obj: any) => canvas.remove(obj));
       
@@ -399,13 +506,11 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   // Re-render canvas when state changes (but not during initial setup)
   useEffect(() => {
     if (fabricCanvasRef.current && isInitialized) {
-      // Only render if we have actual content to show
-      if (canvasState.backgroundImage || canvasState.textElements.length > 0 || canvasState.gridVisible) {
-        console.log('State changed, re-rendering canvas');
-        renderCanvas();
-      }
+      // Only render if we have actual content to show or if test objects should be preserved
+      console.log('State changed, re-rendering canvas');
+      renderCanvas();
     }
-  }, [renderCanvas, isInitialized, canvasState.backgroundImage, canvasState.textElements.length, canvasState.gridVisible]);
+  }, [renderCanvas, isInitialized]);
 
   // Update canvas size when dimensions change
   useEffect(() => {
@@ -517,22 +622,20 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       <div 
         ref={wrapperRef} 
         className="relative flex items-center justify-center w-full h-full max-w-full max-h-full"
-        onDragEnter={handleDragOver}
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         <div className="relative max-w-full max-h-full">
-          <Card className="p-4 bg-blue-100 border-2 border-blue-500 max-w-full max-h-full">
+          <Card className="p-4 bg-canvas-border max-w-full max-h-full">
             <div ref={containerRef} className="max-w-full max-h-full">
               <canvas
                 ref={canvasRef}
-                className="border-2 border-red-500 bg-yellow-200 block"
-                width="800"
-                height="600"
+                className="border border-canvas-border bg-white block"
                 style={{
-                  width: '800px',
-                  height: '600px'
+                  width: `${canvasState.canvasWidth * displayScale}px`,
+                  height: `${canvasState.canvasHeight * displayScale}px`
                 }}
               />
             </div>
@@ -551,48 +654,4 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       </div>
     </div>
   );
-
-  // Drag and drop handlers
-  function handleDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'copy';
-    setIsDragOver(true);
-  }
-
-  function handleDragLeave(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDragOver(false);
-    }
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'copy';
-    setIsDragOver(false);
-    
-    const files = Array.from(e.dataTransfer.files);
-    const imageFile = files.find(file => file.type.startsWith('image/'));
-    
-    if (imageFile) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        const img = new window.Image();
-        img.onload = () => {
-          onUpdateCanvas({
-            backgroundImage: result,
-            backgroundImageFileName: imageFile.name,
-            canvasWidth: img.width,
-            canvasHeight: img.height
-          });
-        };
-        img.src = result;
-      };
-      reader.readAsDataURL(imageFile);
-    }
-  }
 });
