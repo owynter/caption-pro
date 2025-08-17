@@ -2,34 +2,7 @@
 import { forwardRef, useEffect, useRef, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { ImageIcon } from 'lucide-react';
-
-interface TextElement {
-  id: string;
-  content: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fontSize: number;
-  fontFamily: string;
-  fontWeight: string;
-  color: string;
-  strokeColor: string;
-  strokeWidth: number;
-  textAlign: 'left' | 'center' | 'right';
-  rotation: number;
-  opacity: number;
-  shadowColor: string;
-  shadowBlur: number;
-  shadowSize: number;
-  shadowOffsetX: number;
-  shadowOffsetY: number;
-  lineHeight: number;
-  letterSpacing: number;
-  skewX: number;
-  skewY: number;
-  curvature: number;
-}
+import { TextElement } from '../MemeGenerator';
 
 interface FabricCanvasProps {
   canvasState: {
