@@ -32,6 +32,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   const [displayScale, setDisplayScale] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isModifying, setIsModifying] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -218,6 +219,10 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           console.log('Object modified:', e);
           if (e.target && e.target.data && e.target.data.id) {
             const obj = e.target;
+            
+            // Mark object as being modified to prevent removal during re-render
+            obj._isBeingModified = true;
+            
             const updates: Partial<TextElement> = {
               x: Math.round(obj.left || 0),
               y: Math.round(obj.top || 0),
@@ -233,6 +238,11 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             }
 
             onUpdateText(obj.data.id, updates);
+            
+            // Clear the modification flag after a short delay
+            setTimeout(() => {
+              obj._isBeingModified = false;
+            }, 100);
           }
         });
 
@@ -246,6 +256,27 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           }
         });
 
+        canvas.on('object:moving', (e: any) => {
+          if (e.target && e.target.data && e.target.data.id) {
+            e.target._isBeingModified = true;
+            setIsModifying(true);
+          }
+        });
+
+        canvas.on('object:scaling', (e: any) => {
+          if (e.target && e.target.data && e.target.data.id) {
+            e.target._isBeingModified = true;
+            setIsModifying(true);
+          }
+        });
+
+        canvas.on('object:rotating', (e: any) => {
+          if (e.target && e.target.data && e.target.data.id) {
+            e.target._isBeingModified = true;
+            setIsModifying(true);
+          }
+        });
+
         canvas.on('mouse:up', () => {
           // Clear manipulation flags when mouse is released
           const objects = canvas.getObjects();
@@ -253,7 +284,16 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             obj._isBeingDragged = false;
             obj._isBeingScaled = false;
             obj._isBeingRotated = false;
+            // Also clear the modification flag after a delay
+            setTimeout(() => {
+              obj._isBeingModified = false;
+            }, 100);
           });
+          
+          // Clear the global modification state after a delay
+          setTimeout(() => {
+            setIsModifying(false);
+          }, 150);
         });
 
         canvas.renderAll();
@@ -321,9 +361,9 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       const existingTextIds = textObjects.map((obj: any) => obj.data.id);
       const newTextIds = canvasState.textElements.map(el => el.id);
 
-      // Remove text objects that no longer exist
+      // Remove text objects that no longer exist (but don't remove objects being modified)
       textObjects.forEach((obj: any) => {
-        if (!newTextIds.includes(obj.data.id)) {
+        if (!newTextIds.includes(obj.data.id) && !obj._isBeingModified) {
           canvas.remove(obj);
         }
       });
@@ -577,13 +617,13 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
     setDisplayScale(next);
   }, [canvasState.canvasWidth, canvasState.canvasHeight]);
 
-  // Re-render canvas when state changes (but not during initial setup)
+  // Re-render canvas when state changes (but not during initial setup or modifications)
   useEffect(() => {
-    if (fabricCanvasRef.current && isInitialized) {
+    if (fabricCanvasRef.current && isInitialized && !isModifying) {
       console.log('State changed, re-rendering canvas');
       renderCanvas();
     }
-  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized]);
+  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized, isModifying]);
 
   // Update canvas size when dimensions change
   useEffect(() => {
