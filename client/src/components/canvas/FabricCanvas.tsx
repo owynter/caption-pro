@@ -559,10 +559,12 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         height: canvasState.canvasHeight
       });
       fabricCanvasRef.current.renderAll();
-      
-      // Recompute display scale when canvas dimensions change
-      computeDisplayScale();
     }
+  }, [canvasState.canvasWidth, canvasState.canvasHeight]);
+  
+  // Recompute display scale when canvas dimensions change
+  useEffect(() => {
+    computeDisplayScale();
   }, [canvasState.canvasWidth, canvasState.canvasHeight, computeDisplayScale]);
 
   // Update zoom
@@ -576,18 +578,25 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
 
   // Recompute scale on resize
   useEffect(() => {
-    computeDisplayScale();
-    const onResize = () => computeDisplayScale();
-    window.addEventListener('resize', onResize);
+    const handleResize = () => {
+      if (computeDisplayScale) {
+        computeDisplayScale();
+      }
+    };
+    
+    // Initial computation
+    handleResize();
+    
+    window.addEventListener('resize', handleResize);
     
     let ro: ResizeObserver | null = null;
     if (wrapperRef.current && 'ResizeObserver' in window) {
-      ro = new ResizeObserver(() => computeDisplayScale());
+      ro = new ResizeObserver(handleResize);
       ro.observe(wrapperRef.current);
     }
     
     return () => {
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', handleResize);
       if (ro) ro.disconnect();
     };
   }, [computeDisplayScale]);
