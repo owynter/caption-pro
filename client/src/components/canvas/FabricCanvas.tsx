@@ -336,9 +336,17 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         gridObjects.forEach((obj: any) => canvas.remove(obj));
       }
 
-      // Remove background if changed
-      if (!canvasState.backgroundImage && backgroundObjects.length > 0) {
-        backgroundObjects.forEach((obj: any) => canvas.remove(obj));
+      // Remove background if changed or if no background image
+      if (backgroundObjects.length > 0) {
+        if (!canvasState.backgroundImage) {
+          backgroundObjects.forEach((obj: any) => canvas.remove(obj));
+        } else {
+          // Check if background image URL has changed
+          const currentBgObj = backgroundObjects[0];
+          if (currentBgObj.getSrc && currentBgObj.getSrc() !== canvasState.backgroundImage) {
+            backgroundObjects.forEach((obj: any) => canvas.remove(obj));
+          }
+        }
       }
 
       // Update text objects - only remove/add if the text elements have actually changed
@@ -366,6 +374,12 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       await addTextElements();
 
       canvas.renderAll();
+      
+      // Force a refresh to ensure all styling updates are applied
+      setTimeout(() => {
+        canvas.renderAll();
+      }, 10);
+      
       console.log('Canvas rendered with', canvasState.textElements.length, 'text elements');
 
     } catch (err) {
@@ -452,8 +466,17 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
 
         canvas.add(img);
         canvas.sendToBack(img);
+        
+        // Ensure all text elements are brought to front after adding background
+        const textObjects = canvas.getObjects().filter((obj: any) =>
+          obj.data && obj.data.id && !obj.data.isGrid && !obj.data.isBackground
+        );
+        textObjects.forEach((textObj: any) => {
+          canvas.bringToFront(textObj);
+        });
+        
         canvas.renderAll();
-        console.log('Background image added and scaled');
+        console.log('Background image added and scaled, text brought to front');
       }).catch((err: any) => {
         console.error('Failed to load background image:', err);
       });
@@ -506,6 +529,17 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             existingObj.skewY !== element.skewY;
 
           if (needsUpdate && !existingObj._isBeingModified) {
+            // Update shadow first
+            let shadowObj = null;
+            if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
+              shadowObj = new fabric.Shadow({
+                color: element.shadowColor,
+                blur: element.shadowBlur,
+                offsetX: element.shadowOffsetX,
+                offsetY: element.shadowOffsetY
+              });
+            }
+
             existingObj.set({
               text: element.content,
               left: element.x,
@@ -522,22 +556,9 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               lineHeight: element.lineHeight,
               charSpacing: element.letterSpacing,
               skewX: element.skewX,
-              skewY: element.skewY
+              skewY: element.skewY,
+              shadow: shadowObj
             });
-
-            // Update shadow
-            if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
-              existingObj.set({
-                shadow: new fabric.Shadow({
-                  color: element.shadowColor,
-                  blur: element.shadowBlur,
-                  offsetX: element.shadowOffsetX,
-                  offsetY: element.shadowOffsetY
-                })
-              });
-            } else {
-              existingObj.set({ shadow: null });
-            }
           }
 
           // Remove from map so we know it's been processed
@@ -564,16 +585,19 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             data: { id: element.id }
           });
 
-          // Apply advanced properties
+          // Apply shadow if needed
+          let shadowObj = null;
           if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
-            text.set({
-              shadow: new fabric.Shadow({
-                color: element.shadowColor,
-                blur: element.shadowBlur,
-                offsetX: element.shadowOffsetX,
-                offsetY: element.shadowOffsetY
-              })
+            shadowObj = new fabric.Shadow({
+              color: element.shadowColor,
+              blur: element.shadowBlur,
+              offsetX: element.shadowOffsetX,
+              offsetY: element.shadowOffsetY
             });
+          }
+          
+          if (shadowObj) {
+            text.set({ shadow: shadowObj });
           }
 
           canvas.add(text);
