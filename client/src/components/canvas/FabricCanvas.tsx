@@ -221,44 +221,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           }
         });
 
-        // Initial render with test objects
-        console.log('Adding test objects to verify Fabric.js is working...');
-        
-        // Add a simple test rectangle to verify canvas is working
-        const testRect = new fabric.Rect({
-          left: 50,
-          top: 50,
-          width: 100,
-          height: 100,
-          fill: 'red',
-          stroke: 'blue',
-          strokeWidth: 3,
-          selectable: true,
-          data: { isTest: true }
-        });
-        
-        // Add a test text object as well
-        const testText = new fabric.Text('TEST CANVAS', {
-          left: 200,
-          top: 100,
-          fontSize: 24,
-          fill: 'green',
-          fontWeight: 'bold',
-          selectable: true,
-          data: { isTest: true }
-        });
-        
-        console.log('About to add test objects to canvas');
-        canvas.add(testRect);
-        console.log('Test rectangle added, canvas objects count:', canvas.getObjects().length);
-        canvas.add(testText);
-        console.log('Test text added, canvas objects count:', canvas.getObjects().length);
-        
-        console.log('Canvas objects:', canvas.getObjects());
-        console.log('Canvas dimensions:', { width: canvas.width, height: canvas.height });
-        
         canvas.renderAll();
-        console.log('Canvas renderAll() called - test objects should now be visible');
         
         // Mark as initialized
         setIsInitialized(true);
@@ -301,32 +264,47 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         canvasHeight: canvasState.canvasHeight
       });
       
-      // Preserve test objects during development
+      // Get existing objects and categorize them
       const allObjects = canvas.getObjects();
-      const testObjects = allObjects.filter((obj: any) => 
-        obj.data && obj.data.isTest === true
-      );
+      const gridObjects = allObjects.filter((obj: any) => obj.data && obj.data.isGrid);
+      const backgroundObjects = allObjects.filter((obj: any) => obj.data && obj.data.isBackground);
+      const textObjects = allObjects.filter((obj: any) => obj.data && obj.data.id);
       
-      console.log('Preserving test objects:', testObjects.length);
+      // Only remove objects that need to be updated
       
-      // Clear existing non-test objects
-      const nonTestObjects = allObjects.filter((obj: any) => 
-        !obj.data || obj.data.isTest !== true
-      );
-      nonTestObjects.forEach((obj: any) => canvas.remove(obj));
-      
-      // Draw grid if visible
-      if (canvasState.gridVisible) {
-        drawGrid();
+      // Remove old grid if grid visibility changed
+      if (!canvasState.gridVisible && gridObjects.length > 0) {
+        gridObjects.forEach((obj: any) => canvas.remove(obj));
       }
       
-      // Add background image
-      if (canvasState.backgroundImage) {
+      // Remove background if changed
+      if (!canvasState.backgroundImage && backgroundObjects.length > 0) {
+        backgroundObjects.forEach((obj: any) => canvas.remove(obj));
+      }
+      
+      // Update text objects - only remove/add if the text elements have actually changed
+      const existingTextIds = textObjects.map((obj: any) => obj.data.id);
+      const newTextIds = canvasState.textElements.map(el => el.id);
+      
+      // Remove text objects that no longer exist
+      textObjects.forEach((obj: any) => {
+        if (!newTextIds.includes(obj.data.id)) {
+          canvas.remove(obj);
+        }
+      });
+      
+      // Draw grid if visible
+      if (canvasState.gridVisible && gridObjects.length === 0) {
+        await drawGrid();
+      }
+      
+      // Add background image if not present
+      if (canvasState.backgroundImage && backgroundObjects.length === 0) {
         await addBackgroundImage();
       }
       
-      // Add text elements
-      addTextElements();
+      // Add/update text elements
+      await addTextElements();
       
       canvas.renderAll();
       console.log('Canvas rendered with', canvasState.textElements.length, 'text elements');
@@ -431,46 +409,94 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       const fabric = await import('fabric');
       const canvas = fabricCanvasRef.current;
       
-      // Remove existing text objects (except grid, background, and test objects)
-      const existingText = canvas.getObjects().filter((obj: any) => 
-        obj.data && !obj.data.isGrid && !obj.data.isBackground && !obj.data.isTest
+      // Get existing text objects
+      const existingTextObjects = canvas.getObjects().filter((obj: any) => 
+        obj.data && obj.data.id && !obj.data.isGrid && !obj.data.isBackground
       );
-      existingText.forEach((obj: any) => canvas.remove(obj));
       
-      // Add new text elements
-      canvasState.textElements.forEach(element => {
-        const text = new fabric.Text(element.content, {
-          left: element.x,
-          top: element.y,
-          fontSize: element.fontSize,
-          fontFamily: element.fontFamily,
-          fontWeight: element.fontWeight,
-          fill: element.color,
-          stroke: element.strokeColor,
-          strokeWidth: element.strokeWidth,
-          textAlign: element.textAlign,
-          angle: element.rotation,
-          opacity: element.opacity,
-          selectable: true,
-          data: { id: element.id }
-        });
-        
-        // Apply advanced properties
-        if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
-          text.set({
-            shadow: new fabric.Shadow({
-              color: element.shadowColor,
-              blur: element.shadowBlur,
-              offsetX: element.shadowOffsetX,
-              offsetY: element.shadowOffsetY
-            })
-          });
-        }
-        
-        canvas.add(text);
+      // Create a map of existing objects by ID
+      const existingMap = new Map();
+      existingTextObjects.forEach((obj: any) => {
+        existingMap.set(obj.data.id, obj);
       });
       
-      console.log('Added', canvasState.textElements.length, 'text elements');
+      // Process each text element
+      canvasState.textElements.forEach(element => {
+        const existingObj = existingMap.get(element.id);
+        
+        if (existingObj) {
+          // Update existing object properties
+          existingObj.set({
+            text: element.content,
+            left: element.x,
+            top: element.y,
+            fontSize: element.fontSize,
+            fontFamily: element.fontFamily,
+            fontWeight: element.fontWeight,
+            fill: element.color,
+            stroke: element.strokeColor,
+            strokeWidth: element.strokeWidth,
+            textAlign: element.textAlign,
+            angle: element.rotation,
+            opacity: element.opacity
+          });
+          
+          // Update shadow
+          if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
+            existingObj.set({
+              shadow: new fabric.Shadow({
+                color: element.shadowColor,
+                blur: element.shadowBlur,
+                offsetX: element.shadowOffsetX,
+                offsetY: element.shadowOffsetY
+              })
+            });
+          } else {
+            existingObj.set({ shadow: null });
+          }
+          
+          // Remove from map so we know it's been processed
+          existingMap.delete(element.id);
+        } else {
+          // Create new text object
+          const text = new fabric.Text(element.content, {
+            left: element.x,
+            top: element.y,
+            fontSize: element.fontSize,
+            fontFamily: element.fontFamily,
+            fontWeight: element.fontWeight,
+            fill: element.color,
+            stroke: element.strokeColor,
+            strokeWidth: element.strokeWidth,
+            textAlign: element.textAlign,
+            angle: element.rotation,
+            opacity: element.opacity,
+            selectable: true,
+            data: { id: element.id }
+          });
+          
+          // Apply advanced properties
+          if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
+            text.set({
+              shadow: new fabric.Shadow({
+                color: element.shadowColor,
+                blur: element.shadowBlur,
+                offsetX: element.shadowOffsetX,
+                offsetY: element.shadowOffsetY
+              })
+            });
+          }
+          
+          canvas.add(text);
+        }
+      });
+      
+      // Remove any objects that are no longer in the state
+      existingMap.forEach((obj) => {
+        canvas.remove(obj);
+      });
+      
+      console.log('Updated', canvasState.textElements.length, 'text elements');
     } catch (err) {
       console.error('Error adding text elements:', err);
     }
@@ -479,11 +505,10 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   // Re-render canvas when state changes (but not during initial setup)
   useEffect(() => {
     if (fabricCanvasRef.current && isInitialized) {
-      // Only render if we have actual content to show or if test objects should be preserved
       console.log('State changed, re-rendering canvas');
       renderCanvas();
     }
-  }, [renderCanvas, isInitialized]);
+  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized]);
 
   // Update canvas size when dimensions change
   useEffect(() => {
@@ -494,8 +519,11 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         height: canvasState.canvasHeight
       });
       fabricCanvasRef.current.renderAll();
+      
+      // Recompute display scale when canvas dimensions change
+      computeDisplayScale();
     }
-  }, [canvasState.canvasWidth, canvasState.canvasHeight]);
+  }, [canvasState.canvasWidth, canvasState.canvasHeight, computeDisplayScale]);
 
   // Update zoom
   useEffect(() => {
