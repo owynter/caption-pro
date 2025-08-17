@@ -236,6 +236,26 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           }
         });
 
+        canvas.on('selection:updated', (e: any) => {
+          console.log('Selection updated:', e);
+          if (e.selected && e.selected.length > 0) {
+            const obj = e.selected[0];
+            if (obj.data && obj.data.id) {
+              onSelectText(obj.data.id);
+            }
+          }
+        });
+
+        canvas.on('mouse:up', () => {
+          // Clear manipulation flags when mouse is released
+          const objects = canvas.getObjects();
+          objects.forEach((obj: any) => {
+            obj._isBeingDragged = false;
+            obj._isBeingScaled = false;
+            obj._isBeingRotated = false;
+          });
+        });
+
         canvas.renderAll();
 
         // Mark as initialized
