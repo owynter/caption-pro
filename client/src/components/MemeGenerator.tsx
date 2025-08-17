@@ -116,9 +116,9 @@ export const MemeGenerator = () => {
     setHistoryIndex(newHistory.length - 1);
   }, [history, historyIndex]);
 
-  const updateCanvasState = useCallback((updates: Partial<CanvasState>) => {
+  const updateCanvasState = useCallback((updates: Partial<CanvasState> | ((prevState: CanvasState) => CanvasState)) => {
     setCanvasState(prev => {
-      const newState = { ...prev, ...updates };
+      const newState = typeof updates === 'function' ? updates(prev) : { ...prev, ...updates };
       saveToHistory(newState);
       return newState;
     });

@@ -499,7 +499,11 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             existingObj.strokeWidth !== element.strokeWidth ||
             existingObj.textAlign !== element.textAlign ||
             Math.abs(existingObj.angle - element.rotation) > 1 ||
-            existingObj.opacity !== element.opacity;
+            existingObj.opacity !== element.opacity ||
+            existingObj.lineHeight !== element.lineHeight ||
+            existingObj.charSpacing !== element.letterSpacing ||
+            existingObj.skewX !== element.skewX ||
+            existingObj.skewY !== element.skewY;
 
           if (needsUpdate && !existingObj._isBeingModified) {
             existingObj.set({
@@ -514,7 +518,11 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               strokeWidth: element.strokeWidth,
               textAlign: element.textAlign,
               angle: element.rotation,
-              opacity: element.opacity
+              opacity: element.opacity,
+              lineHeight: element.lineHeight,
+              charSpacing: element.letterSpacing,
+              skewX: element.skewX,
+              skewY: element.skewY
             });
 
             // Update shadow
@@ -548,6 +556,10 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             textAlign: element.textAlign,
             angle: element.rotation,
             opacity: element.opacity,
+            lineHeight: element.lineHeight,
+            charSpacing: element.letterSpacing,
+            skewX: element.skewX,
+            skewY: element.skewY,
             selectable: true,
             data: { id: element.id }
           });
