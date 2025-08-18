@@ -562,7 +562,9 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               charSpacing: element.letterSpacing,
               skewX: element.skewX,
               skewY: element.skewY,
-              shadow: shadowObj
+              shadow: shadowObj,
+              selectable: true,
+              evented: true
             });
           }
 
@@ -587,6 +589,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             skewX: element.skewX,
             skewY: element.skewY,
             selectable: true,
+            evented: true,
             data: { id: element.id }
           });
 
