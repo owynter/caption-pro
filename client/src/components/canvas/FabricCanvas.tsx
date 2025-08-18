@@ -349,17 +349,6 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         }
       }
 
-      // Update text objects - only remove/add if the text elements have actually changed
-      const existingTextIds = textObjects.map((obj: any) => obj.data.id);
-      const newTextIds = canvasState.textElements.map(el => el.id);
-
-      // Remove text objects that no longer exist (but don't remove objects being modified)
-      textObjects.forEach((obj: any) => {
-        if (!newTextIds.includes(obj.data.id) && !obj._isBeingModified) {
-          canvas.remove(obj);
-        }
-      });
-
       // Draw grid if visible
       if (canvasState.gridVisible && gridObjects.length === 0) {
         await drawGrid();
@@ -370,7 +359,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         await addBackgroundImage();
       }
 
-      // Add/update text elements
+      // Add/update text elements - DO NOT remove existing text objects here
+      // The addTextElements function will handle updating existing objects
       await addTextElements();
 
       canvas.renderAll();
@@ -619,9 +609,9 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         }
       });
 
-      // Remove any objects that are no longer in the state (but don't remove objects being modified)
-      existingMap.forEach((obj) => {
-        if (!obj._isBeingModified) {
+      // Only remove objects that are no longer in the state AND are not being modified
+      existingMap.forEach((obj, id) => {
+        if (!obj._isBeingModified && !canvasState.textElements.some(el => el.id === id)) {
           canvas.remove(obj);
         }
       });

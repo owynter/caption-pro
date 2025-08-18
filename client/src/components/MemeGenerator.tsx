@@ -459,44 +459,48 @@ export const MemeGenerator = () => {
   useEffect(() => {
     if (canvasState.textElements.length > 0) {
       const margin = 0.2; // 20% margin of error for overlap
-      const updatedElements = canvasState.textElements.map(element => {
-        let newX = element.x;
-        let newY = element.y;
+      
+      updateCanvasState(prevState => {
+        const updatedElements = prevState.textElements.map(element => {
+          let newX = element.x;
+          let newY = element.y;
 
-        // Allow 20% overlap on each side
-        const leftBound = -element.width * margin;
-        const rightBound = canvasState.canvasWidth - element.width * (1 - margin);
-        const topBound = -element.height * margin;
-        const bottomBound = canvasState.canvasHeight - element.height * (1 - margin);
+          // Allow 20% overlap on each side
+          const leftBound = -element.width * margin;
+          const rightBound = prevState.canvasWidth - element.width * (1 - margin);
+          const topBound = -element.height * margin;
+          const bottomBound = prevState.canvasHeight - element.height * (1 - margin);
 
-        // Constrain X position
-        if (newX < leftBound) {
-          newX = leftBound;
-        } else if (newX > rightBound) {
-          newX = rightBound;
+          // Constrain X position
+          if (newX < leftBound) {
+            newX = leftBound;
+          } else if (newX > rightBound) {
+            newX = rightBound;
+          }
+
+          // Constrain Y position
+          if (newY < topBound) {
+            newY = topBound;
+          } else if (newY > bottomBound) {
+            newY = bottomBound;
+          }
+
+          return { ...element, x: newX, y: newY };
+        });
+
+        // Only update if positions actually changed
+        const hasChanges = updatedElements.some((updated, index) => {
+          const original = prevState.textElements[index];
+          return updated.x !== original.x || updated.y !== original.y;
+        });
+
+        if (hasChanges) {
+          return { ...prevState, textElements: updatedElements };
         }
-
-        // Constrain Y position
-        if (newY < topBound) {
-          newY = topBound;
-        } else if (newY > bottomBound) {
-          newY = bottomBound;
-        }
-
-        return { ...element, x: newX, y: newY };
+        return prevState;
       });
-
-      // Only update if positions actually changed
-      const hasChanges = updatedElements.some((updated, index) => {
-        const original = canvasState.textElements[index];
-        return updated.x !== original.x || updated.y !== original.y;
-      });
-
-      if (hasChanges) {
-        updateCanvasState({ textElements: updatedElements });
-      }
     }
-  }, [canvasState.canvasWidth, canvasState.canvasHeight]); // Only trigger on canvas size changes
+  }, [canvasState.canvasWidth, canvasState.canvasHeight, updateCanvasState]); // Only trigger on canvas size changes
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
