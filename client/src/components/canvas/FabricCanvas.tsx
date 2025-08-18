@@ -464,18 +464,33 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           top: (canvasState.canvasHeight - img.height * scale) / 2
         });
 
-        canvas.add(img);
-        canvas.sendToBack(img);
-        
-        // Ensure all text elements are brought to front after adding background
+        // Store existing text objects before adding background
         const textObjects = canvas.getObjects().filter((obj: any) =>
           obj.data && obj.data.id && !obj.data.isGrid && !obj.data.isBackground
         );
+
+        canvas.add(img);
+        canvas.sendToBack(img);
+        
+        // Re-add text objects on top of background and ensure they're selectable
         textObjects.forEach((textObj: any) => {
+          // Ensure text objects are selectable and evented
+          textObj.set({
+            selectable: true,
+            evented: true
+          });
           canvas.bringToFront(textObj);
         });
         
-        canvas.renderAll();
+        // Force canvas to recalculate object order and interactions
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        
+        // Small delay to ensure proper rendering and interaction setup
+        setTimeout(() => {
+          canvas.renderAll();
+        }, 50);
+        
         console.log('Background image added and scaled, text brought to front');
       }).catch((err: any) => {
         console.error('Failed to load background image:', err);
