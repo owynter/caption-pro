@@ -3,6 +3,75 @@ import { Card } from '@/components/ui/card';
 import { ImageIcon } from 'lucide-react';
 import { TextElement, getFontSizeInPixels, getProportionalStrokeWidth } from '../MemeGenerator';
 
+// Declare fabric global since it's loaded dynamically
+declare const fabric: any;
+
+// Helper function to convert hex color and alpha to rgba string
+function getRgbaColor(color: string, alpha: number): string {
+  if (color.startsWith('#')) {
+    const hex = color.substring(1);
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color; // Return as-is if already in rgba format
+}
+
+// Helper function to create gradient fill
+function getGradientFill(element: TextElement): any {
+  if (!element.fillType || element.fillType === 'solid') {
+    return getRgbaColor(element.color, element.colorAlpha || 1);
+  }
+
+  const startColor = getRgbaColor(element.gradientStartColor || '#ffffff', element.gradientStartColorAlpha || 1);
+  const endColor = getRgbaColor(element.gradientEndColor || '#000000', element.gradientEndColorAlpha || 1);
+
+  if (element.gradientType === 'radial') {
+    // Create radial gradient
+    const centerX = (element.gradientX1 || 50) / 100;
+    const centerY = (element.gradientY1 || 50) / 100;
+    const radius = Math.max(element.width, element.height) / 2;
+
+    return new fabric.Gradient({
+      type: 'radial',
+      coords: {
+        x1: centerX,
+        y1: centerY,
+        x2: centerX,
+        y2: centerY,
+        r1: 0,
+        r2: radius
+      },
+      colorStops: [
+        { offset: 0, color: startColor },
+        { offset: 1, color: endColor }
+      ]
+    });
+  } else {
+    // Create linear gradient
+    const angle = (element.gradientAngle || 0) * Math.PI / 180;
+    const x1 = 0.5 - Math.cos(angle) * 0.5;
+    const y1 = 0.5 - Math.sin(angle) * 0.5;
+    const x2 = 0.5 + Math.cos(angle) * 0.5;
+    const y2 = 0.5 + Math.sin(angle) * 0.5;
+
+    return new fabric.Gradient({
+      type: 'linear',
+      coords: {
+        x1: x1,
+        y1: y1,
+        x2: x2,
+        y2: y2
+      },
+      colorStops: [
+        { offset: 0, color: startColor },
+        { offset: 1, color: endColor }
+      ]
+    });
+  }
+}
+
 interface FabricCanvasProps {
   canvasState: {
     backgroundImage: string | null;
@@ -583,8 +652,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             existingObj.fontSize !== targetFontSize ||
             existingObj.fontFamily !== element.fontFamily ||
             existingObj.fontWeight !== element.fontWeight ||
-            existingObj.fill !== element.color ||
-            existingObj.stroke !== element.strokeColor ||
+            existingObj.fill !== (element.fillType === 'gradient' ? getGradientFill(element) : getRgbaColor(element.color, element.colorAlpha || 1)) ||
+            existingObj.stroke !== getRgbaColor(element.strokeColor, element.strokeColorAlpha || 1) ||
             existingObj.strokeWidth !== targetStrokeWidth ||
             existingObj.textAlign !== element.textAlign ||
             Math.abs(existingObj.angle - element.rotation) > 1 ||
@@ -594,7 +663,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             existingObj.skewX !== element.skewX ||
             existingObj.skewY !== element.skewY ||
             // Shadow property changes
-            (existingObj.shadow && existingObj.shadow.color) !== element.shadowColor ||
+            (existingObj.shadow && existingObj.shadow.color) !== getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5) ||
             (existingObj.shadow && existingObj.shadow.blur) !== element.shadowBlur ||
             (existingObj.shadow && existingObj.shadow.offsetX) !== element.shadowOffsetX ||
             (existingObj.shadow && existingObj.shadow.offsetY) !== element.shadowOffsetY ||
@@ -607,7 +676,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             let shadowObj = null;
             if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
               shadowObj = new fabric.Shadow({
-                color: element.shadowColor,
+                color: getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5),
                 blur: element.shadowBlur,
                 offsetX: element.shadowOffsetX,
                 offsetY: element.shadowOffsetY
@@ -621,8 +690,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               fontSize: targetFontSize,
               fontFamily: element.fontFamily,
               fontWeight: element.fontWeight,
-              fill: element.color,
-              stroke: element.strokeColor,
+              fill: element.fillType === 'gradient' ? getGradientFill(element) : getRgbaColor(element.color, element.colorAlpha || 1),
+              stroke: getRgbaColor(element.strokeColor, element.strokeColorAlpha || 1),
               strokeWidth: targetStrokeWidth,
               textAlign: element.textAlign,
               angle: element.rotation,
@@ -653,8 +722,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             fontSize: newFontSize,
             fontFamily: element.fontFamily,
             fontWeight: element.fontWeight,
-            fill: element.color,
-            stroke: element.strokeColor,
+            fill: element.fillType === 'gradient' ? getGradientFill(element) : getRgbaColor(element.color, element.colorAlpha || 1),
+            stroke: getRgbaColor(element.strokeColor, element.strokeColorAlpha || 1),
             strokeWidth: newStrokeWidth,
             textAlign: element.textAlign,
             angle: element.rotation,
@@ -674,7 +743,7 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           let shadowObj = null;
           if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0) {
             shadowObj = new fabric.Shadow({
-              color: element.shadowColor,
+              color: getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5),
               blur: element.shadowBlur,
               offsetX: element.shadowOffsetX,
               offsetY: element.shadowOffsetY

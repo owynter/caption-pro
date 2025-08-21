@@ -9,6 +9,18 @@ import { Card } from '@/components/ui/card';
 import { Download, FileImage, Palette } from 'lucide-react';
 import { CanvasState, getFontSizeInPixels, getProportionalStrokeWidth } from '../MemeGenerator';
 
+// Helper function to convert hex color and alpha to rgba string
+function getRgbaColor(color: string, alpha: number): string {
+  if (color.startsWith('#')) {
+    const hex = color.substring(1);
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color; // Return as-is if already in rgba format
+}
+
 interface ExportDialogProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   canvasState: CanvasState;
@@ -125,7 +137,7 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
         // Render shadow first (behind everything)
         if (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0 || (element.shadowSize && element.shadowSize > 0)) {
           ctx.save();
-          ctx.shadowColor = element.shadowColor;
+          ctx.shadowColor = getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5);
           ctx.shadowBlur = element.shadowBlur;
           ctx.shadowOffsetX = element.shadowOffsetX;
           ctx.shadowOffsetY = element.shadowOffsetY;
@@ -139,28 +151,28 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
             
             // Draw shadow with stroke if stroke exists
             if (element.strokeWidth > 0) {
-              ctx.strokeStyle = element.shadowColor;
+              ctx.strokeStyle = getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5);
               ctx.lineWidth = getProportionalStrokeWidth(element.strokeWidth, element.fontSize) / shadowSize;
               ctx.lineJoin = 'round';
               ctx.miterLimit = 2;
               renderTextLine(line, scaledX, scaledY, (text, x, y) => ctx.strokeText(text, x, y));
             }
-            
+
             // Draw shadow fill
-            ctx.fillStyle = element.shadowColor;
+            ctx.fillStyle = getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5);
             renderTextLine(line, scaledX, scaledY, (text, x, y) => ctx.fillText(text, x, y));
           } else {
             // Draw shadow with stroke if stroke exists
             if (element.strokeWidth > 0) {
-              ctx.strokeStyle = element.shadowColor;
+              ctx.strokeStyle = getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5);
               ctx.lineWidth = element.strokeWidth;
               ctx.lineJoin = 'round';
               ctx.miterLimit = 2;
               renderTextLine(line, textX, lineY, (text, x, y) => ctx.strokeText(text, x, y));
             }
-            
+
             // Draw shadow fill
-            ctx.fillStyle = element.shadowColor;
+            ctx.fillStyle = getRgbaColor(element.shadowColor, element.shadowColorAlpha || 0.5);
             renderTextLine(line, textX, lineY, (text, x, y) => ctx.fillText(text, x, y));
           }
           ctx.restore();
@@ -168,15 +180,45 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
         
         // Render main text stroke
                     if (element.strokeWidth > 0) {
-              ctx.strokeStyle = element.strokeColor;
+              ctx.strokeStyle = getRgbaColor(element.strokeColor, element.strokeColorAlpha || 1);
               ctx.lineWidth = getProportionalStrokeWidth(element.strokeWidth, element.fontSize);
           ctx.lineJoin = 'round';
           ctx.miterLimit = 2;
           renderTextLine(line, textX, lineY, (text, x, y) => ctx.strokeText(text, x, y));
         }
-        
-        // Draw fill
-        ctx.fillStyle = element.color;
+
+        // Draw fill - support gradients
+        if (element.fillType === 'gradient') {
+          // Create gradient based on element properties
+          const startColor = getRgbaColor(element.gradientStartColor || '#ffffff', element.gradientStartColorAlpha || 1);
+          const endColor = getRgbaColor(element.gradientEndColor || '#000000', element.gradientEndColorAlpha || 1);
+
+          let gradient;
+          const fontSize = getFontSizeInPixels(element.fontSize, canvasState.canvasWidth);
+          const textWidth = ctx.measureText(line).width;
+          const textHeight = fontSize * element.lineHeight;
+
+          if (element.gradientType === 'radial') {
+            const centerX = textX + (element.gradientX1 || 50) / 100 * textWidth;
+            const centerY = lineY + (element.gradientY1 || 50) / 100 * textHeight;
+            const radius = Math.max(textWidth, textHeight) / 2;
+            gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+          } else {
+            // Linear gradient
+            const angle = ((element.gradientAngle || 0) * Math.PI) / 180;
+            const x1 = textX + (textWidth * 0.5) - Math.cos(angle) * textWidth * 0.5;
+            const y1 = lineY + (textHeight * 0.5) - Math.sin(angle) * textHeight * 0.5;
+            const x2 = textX + (textWidth * 0.5) + Math.cos(angle) * textWidth * 0.5;
+            const y2 = lineY + (textHeight * 0.5) + Math.sin(angle) * textHeight * 0.5;
+            gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+          }
+
+          gradient.addColorStop(0, startColor);
+          gradient.addColorStop(1, endColor);
+          ctx.fillStyle = gradient;
+        } else {
+          ctx.fillStyle = getRgbaColor(element.color, element.colorAlpha || 1);
+        }
         renderTextLine(line, textX, lineY, (text, x, y) => ctx.fillText(text, x, y));
       });
 

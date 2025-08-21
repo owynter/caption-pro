@@ -106,7 +106,21 @@ export const GENERATED_STYLES: SavedTextStyle[] = ${JSON.stringify(savedStyles, 
               style={{fontFamily: 'Figtree, sans-serif'}}
             />
           </div>
-          
+
+          <div>
+            <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+              Fill Opacity: {Math.round((selectedElement.colorAlpha || 1) * 100)}%
+            </Label>
+            <Slider
+              value={[(selectedElement.colorAlpha || 1) * 100]}
+              onValueChange={([value]) => onUpdateText(selectedElement.id, { colorAlpha: value / 100 })}
+              min={0}
+              max={100}
+              step={1}
+              className="mt-2"
+            />
+          </div>
+
           <div className="grid grid-cols-5 gap-2">
             {predefinedColors.map((color) => (
               <button
@@ -139,6 +153,20 @@ export const GENERATED_STYLES: SavedTextStyle[] = ${JSON.stringify(savedStyles, 
               placeholder="#000000 or rgba(0,0,0,1)"
               className="flex-1 font-mono text-sm"
               style={{fontFamily: 'Figtree, sans-serif'}}
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+              Stroke Opacity: {Math.round((selectedElement.strokeColorAlpha || 1) * 100)}%
+            </Label>
+            <Slider
+              value={[(selectedElement.strokeColorAlpha || 1) * 100]}
+              onValueChange={([value]) => onUpdateText(selectedElement.id, { strokeColorAlpha: value / 100 })}
+              min={0}
+              max={100}
+              step={1}
+              className="mt-2"
             />
           </div>
 
@@ -179,6 +207,20 @@ export const GENERATED_STYLES: SavedTextStyle[] = ${JSON.stringify(savedStyles, 
               placeholder="#000000 or rgba(0,0,0,0.5)"
               className="flex-1 font-mono text-sm"
               style={{fontFamily: 'Figtree, sans-serif'}}
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+              Shadow Opacity: {Math.round((selectedElement.shadowColorAlpha || 0.5) * 100)}%
+            </Label>
+            <Slider
+              value={[(selectedElement.shadowColorAlpha || 0.5) * 100]}
+              onValueChange={([value]) => onUpdateText(selectedElement.id, { shadowColorAlpha: value / 100 })}
+              min={0}
+              max={100}
+              step={1}
+              className="mt-2"
             />
           </div>
 
@@ -241,6 +283,164 @@ export const GENERATED_STYLES: SavedTextStyle[] = ${JSON.stringify(savedStyles, 
               />
             </div>
           </div>
+        </div>
+      </Card>
+
+      <Card className="p-4 space-y-4">
+        <h3 className="font-semibold text-sm flex items-center gap-2" style={{fontFamily: 'Sora, sans-serif'}}>
+          <Palette className="h-3 w-3" />
+          Fill Type
+        </h3>
+
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>Fill Type</Label>
+            <Select
+              value={selectedElement.fillType || 'solid'}
+              onValueChange={(value: 'solid' | 'gradient') => onUpdateText(selectedElement.id, { fillType: value })}
+            >
+              <SelectTrigger className="mt-1" style={{fontFamily: 'Figtree, sans-serif'}}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="solid">Solid Color</SelectItem>
+                <SelectItem value="gradient">Gradient</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(selectedElement.fillType === 'gradient') && (
+            <>
+              <div>
+                <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>Gradient Type</Label>
+                <Select
+                  value={selectedElement.gradientType || 'linear'}
+                  onValueChange={(value: 'linear' | 'radial') => onUpdateText(selectedElement.id, { gradientType: value })}
+                >
+                  <SelectTrigger className="mt-1" style={{fontFamily: 'Figtree, sans-serif'}}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="linear">Linear</SelectItem>
+                    <SelectItem value="radial">Radial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>Start Color</h4>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={(selectedElement.gradientStartColor || '#ffffff').startsWith('#') ? (selectedElement.gradientStartColor || '#ffffff') : '#ffffff'}
+                    onChange={(e) => onUpdateText(selectedElement.id, { gradientStartColor: e.target.value })}
+                    className="w-12 h-8 p-1 border rounded"
+                  />
+                  <Input
+                    type="text"
+                    value={selectedElement.gradientStartColor || '#ffffff'}
+                    onChange={(e) => onUpdateText(selectedElement.id, { gradientStartColor: e.target.value })}
+                    placeholder="#ffffff"
+                    className="flex-1 font-mono text-sm"
+                    style={{fontFamily: 'Figtree, sans-serif'}}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+                    Start Opacity: {Math.round((selectedElement.gradientStartColorAlpha || 1) * 100)}%
+                  </Label>
+                  <Slider
+                    value={[(selectedElement.gradientStartColorAlpha || 1) * 100]}
+                    onValueChange={([value]) => onUpdateText(selectedElement.id, { gradientStartColorAlpha: value / 100 })}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>End Color</h4>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={(selectedElement.gradientEndColor || '#000000').startsWith('#') ? (selectedElement.gradientEndColor || '#000000') : '#000000'}
+                    onChange={(e) => onUpdateText(selectedElement.id, { gradientEndColor: e.target.value })}
+                    className="w-12 h-8 p-1 border rounded"
+                  />
+                  <Input
+                    type="text"
+                    value={selectedElement.gradientEndColor || '#000000'}
+                    onChange={(e) => onUpdateText(selectedElement.id, { gradientEndColor: e.target.value })}
+                    placeholder="#000000"
+                    className="flex-1 font-mono text-sm"
+                    style={{fontFamily: 'Figtree, sans-serif'}}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+                    End Opacity: {Math.round((selectedElement.gradientEndColorAlpha || 1) * 100)}%
+                  </Label>
+                  <Slider
+                    value={[(selectedElement.gradientEndColorAlpha || 1) * 100]}
+                    onValueChange={([value]) => onUpdateText(selectedElement.id, { gradientEndColorAlpha: value / 100 })}
+                    min={0}
+                    max={100}
+                    step={1}
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+
+              {selectedElement.gradientType === 'linear' && (
+                <div>
+                  <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+                    Gradient Angle: {selectedElement.gradientAngle || 0}°
+                  </Label>
+                  <Slider
+                    value={[selectedElement.gradientAngle || 0]}
+                    onValueChange={([value]) => onUpdateText(selectedElement.id, { gradientAngle: value })}
+                    min={0}
+                    max={360}
+                    step={1}
+                    className="mt-2"
+                  />
+                </div>
+              )}
+
+              {selectedElement.gradientType === 'radial' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+                      Center X: {selectedElement.gradientX1 || 50}%
+                    </Label>
+                    <Slider
+                      value={[selectedElement.gradientX1 || 50]}
+                      onValueChange={([value]) => onUpdateText(selectedElement.id, { gradientX1: value })}
+                      min={0}
+                      max={100}
+                      step={1}
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium" style={{fontFamily: 'Figtree, sans-serif'}}>
+                      Center Y: {selectedElement.gradientY1 || 50}%
+                    </Label>
+                    <Slider
+                      value={[selectedElement.gradientY1 || 50]}
+                      onValueChange={([value]) => onUpdateText(selectedElement.id, { gradientY1: value })}
+                      min={0}
+                      max={100}
+                      step={1}
+                      className="mt-2"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Card>
 

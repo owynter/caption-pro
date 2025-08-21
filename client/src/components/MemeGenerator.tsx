@@ -48,7 +48,9 @@ export interface TextElement {
   fontFamily: string;
   fontWeight: string;
   color: string;
+  colorAlpha: number; // 0-1 transparency for fill color
   strokeColor: string;
+  strokeColorAlpha: number; // 0-1 transparency for stroke color
   strokeWidth: number;
   textAlign: 'left' | 'center' | 'right';
   rotation: number;
@@ -56,6 +58,7 @@ export interface TextElement {
   zIndex: number;
   selected: boolean;
   shadowColor: string;
+  shadowColorAlpha: number; // 0-1 transparency for shadow color
   shadowBlur: number;
   shadowSize: number;
   shadowOffsetX: number;
@@ -65,6 +68,18 @@ export interface TextElement {
   skewX: number;
   skewY: number;
   curvature: number;
+  // Gradient properties
+  fillType: 'solid' | 'gradient';
+  gradientType: 'linear' | 'radial';
+  gradientStartColor: string;
+  gradientStartColorAlpha: number; // 0-1 transparency for gradient start
+  gradientEndColor: string;
+  gradientEndColorAlpha: number; // 0-1 transparency for gradient end
+  gradientAngle: number; // 0-360 degrees for linear gradients
+  gradientX1: number; // 0-100 percentage for radial gradients
+  gradientY1: number; // 0-100 percentage for radial gradients
+  gradientX2: number; // 0-100 percentage for radial gradients
+  gradientY2: number; // 0-100 percentage for radial gradients
 }
 
 export interface SavedTextStyle {
@@ -74,10 +89,13 @@ export interface SavedTextStyle {
   fontFamily: string;
   fontWeight: string;
   color: string;
+  colorAlpha: number; // 0-1 transparency for fill color
   strokeColor: string;
+  strokeColorAlpha: number; // 0-1 transparency for stroke color
   strokeWidth: number;
   textAlign: 'left' | 'center' | 'right';
   shadowColor: string;
+  shadowColorAlpha: number; // 0-1 transparency for shadow color
   shadowBlur: number;
   shadowSize: number;
   shadowOffsetX: number;
@@ -87,6 +105,18 @@ export interface SavedTextStyle {
   skewX: number;
   skewY: number;
   curvature: number;
+  // Gradient properties
+  fillType: 'solid' | 'gradient';
+  gradientType: 'linear' | 'radial';
+  gradientStartColor: string;
+  gradientStartColorAlpha: number; // 0-1 transparency for gradient start
+  gradientEndColor: string;
+  gradientEndColorAlpha: number; // 0-1 transparency for gradient end
+  gradientAngle: number; // 0-360 degrees for linear gradients
+  gradientX1: number; // 0-100 percentage for radial gradients
+  gradientY1: number; // 0-100 percentage for radial gradients
+  gradientX2: number; // 0-100 percentage for radial gradients
+  gradientY2: number; // 0-100 percentage for radial gradients
   createdAt: string;
 }
 
@@ -191,7 +221,9 @@ export const MemeGenerator = () => {
       fontFamily: 'Arial',
       fontWeight: 'bold',
       color: '#ffffff',
+      colorAlpha: 1.0, // Fully opaque
       strokeColor: '#000000',
+      strokeColorAlpha: 1.0, // Fully opaque
       strokeWidth: 2,
       textAlign: 'center',
       rotation: 0,
@@ -199,6 +231,7 @@ export const MemeGenerator = () => {
       zIndex: maxZ + 1,
       selected: false,
       shadowColor: '#000000',
+      shadowColorAlpha: 0.5, // Semi-transparent shadow
       shadowBlur: 4,
       shadowSize: 1,
       shadowOffsetX: 2,
@@ -207,7 +240,19 @@ export const MemeGenerator = () => {
       letterSpacing: 0,
       skewX: 0,
       skewY: 0,
-      curvature: 0
+      curvature: 0,
+      // Gradient properties
+      fillType: 'solid',
+      gradientType: 'linear',
+      gradientStartColor: '#ffffff',
+      gradientStartColorAlpha: 1.0,
+      gradientEndColor: '#000000',
+      gradientEndColorAlpha: 1.0,
+      gradientAngle: 0,
+      gradientX1: 0,
+      gradientY1: 0,
+      gradientX2: 100,
+      gradientY2: 100
     };
 
     updateCanvasState({
@@ -394,10 +439,13 @@ export const MemeGenerator = () => {
       fontFamily: element.fontFamily,
       fontWeight: element.fontWeight,
       color: element.color,
+      colorAlpha: element.colorAlpha || 1,
       strokeColor: element.strokeColor,
+      strokeColorAlpha: element.strokeColorAlpha || 1,
       strokeWidth: element.strokeWidth,
       textAlign: element.textAlign,
       shadowColor: element.shadowColor,
+      shadowColorAlpha: element.shadowColorAlpha || 0.5,
       shadowBlur: element.shadowBlur,
       shadowSize: element.shadowSize,
       shadowOffsetX: element.shadowOffsetX,
@@ -407,6 +455,18 @@ export const MemeGenerator = () => {
       skewX: element.skewX,
       skewY: element.skewY,
       curvature: element.curvature,
+      // Gradient properties
+      fillType: element.fillType || 'solid',
+      gradientType: element.gradientType || 'linear',
+      gradientStartColor: element.gradientStartColor || '#ffffff',
+      gradientStartColorAlpha: element.gradientStartColorAlpha || 1,
+      gradientEndColor: element.gradientEndColor || '#000000',
+      gradientEndColorAlpha: element.gradientEndColorAlpha || 1,
+      gradientAngle: element.gradientAngle || 0,
+      gradientX1: element.gradientX1 || 50,
+      gradientY1: element.gradientY1 || 50,
+      gradientX2: element.gradientX2 || 50,
+      gradientY2: element.gradientY2 || 50,
       createdAt: new Date().toISOString()
     };
 
