@@ -6,7 +6,7 @@ export const GENERATED_STYLES: SavedTextStyle[] = [
   {
     "id": "classic-meme-style",
     "name": "Classic Meme",
-    "fontSize": 36,
+    "fontSize": 8,
     "fontFamily": "Impact",
     "fontWeight": "bold",
     "color": "#ffffff",
@@ -28,7 +28,7 @@ export const GENERATED_STYLES: SavedTextStyle[] = [
   {
     "id": "elegant-style",
     "name": "Elegant Text",
-    "fontSize": 28,
+    "fontSize": 6,
     "fontFamily": "Helvetica",
     "fontWeight": "normal",
     "color": "#000000",

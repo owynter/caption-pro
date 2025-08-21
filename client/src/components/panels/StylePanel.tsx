@@ -374,7 +374,7 @@ export const GENERATED_STYLES: SavedTextStyle[] = ${JSON.stringify(savedStyles, 
                           {style.name}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5 break-words">
-                          {style.fontFamily} • {style.fontSize}px
+                          {style.fontFamily} • {style.fontSize}%
                         </div>
                       </button>
                       

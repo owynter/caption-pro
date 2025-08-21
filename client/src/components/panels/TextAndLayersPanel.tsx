@@ -180,7 +180,7 @@ const SortableLayerItem = ({
           {element.content || 'Empty Text'}
         </div>
         <div className="text-xs text-muted-foreground">
-          {element.fontFamily} • {element.fontSize}px
+          {element.fontFamily} • {element.fontSize}%
         </div>
       </div>
 
@@ -493,8 +493,8 @@ export const TextAndLayersPanel = ({
                 <Slider
                   value={[selectedElement.fontSize]}
                   onValueChange={([value]) => onUpdateText(selectedElement.id, { fontSize: value })}
-                  min={8}
-                  max={200}
+                  min={5}
+                  max={100}
                   step={1}
                   className="flex-1"
                 />
@@ -503,7 +503,7 @@ export const TextAndLayersPanel = ({
                   className="w-20"
                   value={selectedElement.fontSize}
                   onChange={(e) => {
-                    const n = commitNumber(e.target.value, selectedElement.fontSize, { min: 1, max: 500 });
+                    const n = commitNumber(e.target.value, selectedElement.fontSize, { min: 5, max: 100 });
                     onUpdateText(selectedElement.id, { fontSize: n });
                   }}
                 />

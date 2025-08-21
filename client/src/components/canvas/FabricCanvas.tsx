@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useRef, useState, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { ImageIcon } from 'lucide-react';
-import { TextElement } from '../MemeGenerator';
+import { TextElement, getFontSizeInPixels, getProportionalStrokeWidth } from '../MemeGenerator';
 
 interface FabricCanvasProps {
   canvasState: {
@@ -178,6 +178,12 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           enableRetinaScaling: false,
         });
 
+        // Set HTML canvas attributes to match Fabric.js dimensions
+        if (canvasRef.current) {
+          canvasRef.current.width = canvasState.canvasWidth;
+          canvasRef.current.height = canvasState.canvasHeight;
+        }
+
         console.log('Fabric.js canvas created with dimensions:', {
           width: canvasState.canvasWidth,
           height: canvasState.canvasHeight
@@ -198,12 +204,23 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           lowerCanvas.style.width = `${displayWidth}px`;
           lowerCanvas.style.height = `${displayHeight}px`;
         }
+        
+        // Important: Tell Fabric.js to recalculate coordinates when CSS scaling is applied
+        canvas.calcOffset();
 
         // Set up canvas event handlers
         canvas.on('selection:created', (e: any) => {
           console.log('Selection created:', e);
           if (e.selected && e.selected.length > 0) {
             const obj = e.selected[0];
+            console.log('Selected object:', {
+              type: obj.type,
+              data: obj.data,
+              selectable: obj.selectable,
+              evented: obj.evented,
+              left: obj.left,
+              top: obj.top
+            });
             if (obj.data && obj.data.id) {
               onSelectText(obj.data.id);
             }
@@ -213,6 +230,27 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         canvas.on('selection:cleared', () => {
           console.log('Selection cleared');
           onSelectText(null);
+        });
+
+        canvas.on('mouse:down', (e: any) => {
+          console.log('Mouse down:', {
+            target: e.target ? {
+              type: e.target.type,
+              data: e.target.data,
+              selectable: e.target.selectable,
+              evented: e.target.evented
+            } : 'no target',
+            pointer: e.pointer
+          });
+        });
+
+        canvas.on('mouse:up', (e: any) => {
+          console.log('Mouse up:', {
+            target: e.target ? {
+              type: e.target.type,
+              data: e.target.data
+            } : 'no target'
+          });
         });
 
         canvas.on('object:modified', (e: any) => {
@@ -365,11 +403,6 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
 
       canvas.renderAll();
       
-      // Force a refresh to ensure all styling updates are applied
-      setTimeout(() => {
-        canvas.renderAll();
-      }, 10);
-      
       console.log('Canvas rendered with', canvasState.textElements.length, 'text elements');
 
     } catch (err) {
@@ -454,31 +487,55 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           top: (canvasState.canvasHeight - img.height * scale) / 2
         });
 
-        // Store existing text objects before adding background
-        const textObjects = canvas.getObjects().filter((obj: any) =>
-          obj.data && obj.data.id && !obj.data.isGrid && !obj.data.isBackground
-        );
-
         canvas.add(img);
         canvas.sendToBack(img);
         
-        // Re-add text objects on top of background and ensure they're selectable
-        textObjects.forEach((textObj: any) => {
-          // Ensure text objects are selectable and evented
-          textObj.set({
-            selectable: true,
-            evented: true
-          });
-          canvas.bringToFront(textObj);
+        // Ensure all existing text objects are brought to front and remain interactive
+        const allObjects = canvas.getObjects();
+        console.log('All objects after background added:', allObjects.map((obj: any) => ({
+          type: obj.type,
+          data: obj.data,
+          selectable: obj.selectable,
+          evented: obj.evented,
+          zIndex: canvas.getObjects().indexOf(obj)
+        })));
+        
+        allObjects.forEach((obj: any) => {
+          if (obj.data && obj.data.id && !obj.data.isGrid && !obj.data.isBackground) {
+            // Ensure text objects are above background and fully interactive
+            obj.set({
+              selectable: true,
+              evented: true,
+              moveCursor: 'move',
+              hoverCursor: 'move'
+            });
+            canvas.bringObjectToFront(obj);
+            console.log('Brought text object to front:', {
+              id: obj.data.id,
+              type: obj.type,
+              selectable: obj.selectable,
+              evented: obj.evented,
+              newZIndex: canvas.getObjects().indexOf(obj)
+            });
+          }
         });
         
-        // Force canvas to recalculate object order and interactions
+        // Clear any active selection to reset interaction state
         canvas.discardActiveObject();
+        
+        // Force complete re-render and recalculation of object interactions
         canvas.requestRenderAll();
         
-        // Small delay to ensure proper rendering and interaction setup
+        // Single render cycle with proper offset calculation
         setTimeout(() => {
+          canvas.calcOffset();
           canvas.renderAll();
+          console.log('Final object order after background image:', canvas.getObjects().map((obj: any) => ({
+            type: obj.type,
+            data: obj.data,
+            selectable: obj.selectable,
+            evented: obj.evented
+          })));
         }, 50);
         
         console.log('Background image added and scaled, text brought to front');
@@ -514,24 +571,36 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
         const existingObj = existingMap.get(element.id);
 
         if (existingObj) {
+          // Calculate values once to avoid repeated calculations
+          const targetFontSize = getFontSizeInPixels(element.fontSize, canvasState.canvasWidth);
+          const targetStrokeWidth = getProportionalStrokeWidth(element.strokeWidth, element.fontSize);
+          
           // Only update properties if they've actually changed to avoid triggering events
           const needsUpdate = 
             existingObj.text !== element.content ||
             Math.abs(existingObj.left - element.x) > 1 ||
             Math.abs(existingObj.top - element.y) > 1 ||
-            existingObj.fontSize !== element.fontSize ||
+            existingObj.fontSize !== targetFontSize ||
             existingObj.fontFamily !== element.fontFamily ||
             existingObj.fontWeight !== element.fontWeight ||
             existingObj.fill !== element.color ||
             existingObj.stroke !== element.strokeColor ||
-            existingObj.strokeWidth !== element.strokeWidth ||
+            existingObj.strokeWidth !== targetStrokeWidth ||
             existingObj.textAlign !== element.textAlign ||
             Math.abs(existingObj.angle - element.rotation) > 1 ||
             existingObj.opacity !== element.opacity ||
             existingObj.lineHeight !== element.lineHeight ||
             existingObj.charSpacing !== element.letterSpacing ||
             existingObj.skewX !== element.skewX ||
-            existingObj.skewY !== element.skewY;
+            existingObj.skewY !== element.skewY ||
+            // Shadow property changes
+            (existingObj.shadow && existingObj.shadow.color) !== element.shadowColor ||
+            (existingObj.shadow && existingObj.shadow.blur) !== element.shadowBlur ||
+            (existingObj.shadow && existingObj.shadow.offsetX) !== element.shadowOffsetX ||
+            (existingObj.shadow && existingObj.shadow.offsetY) !== element.shadowOffsetY ||
+            // Check if shadow existence changed
+            (!existingObj.shadow && (element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0)) ||
+            (existingObj.shadow && !(element.shadowBlur > 0 || element.shadowOffsetX !== 0 || element.shadowOffsetY !== 0));
 
           if (needsUpdate && !existingObj._isBeingModified) {
             // Update shadow first
@@ -549,12 +618,12 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               text: element.content,
               left: element.x,
               top: element.y,
-              fontSize: element.fontSize,
+              fontSize: targetFontSize,
               fontFamily: element.fontFamily,
               fontWeight: element.fontWeight,
               fill: element.color,
               stroke: element.strokeColor,
-              strokeWidth: element.strokeWidth,
+              strokeWidth: targetStrokeWidth,
               textAlign: element.textAlign,
               angle: element.rotation,
               opacity: element.opacity,
@@ -564,23 +633,29 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
               skewY: element.skewY,
               shadow: shadowObj,
               selectable: true,
-              evented: true
+              evented: true,
+              moveCursor: 'move',
+              hoverCursor: 'move'
             });
           }
 
           // Remove from map so we know it's been processed
           existingMap.delete(element.id);
         } else {
+          // Calculate values once for new text objects
+          const newFontSize = getFontSizeInPixels(element.fontSize, canvasState.canvasWidth);
+          const newStrokeWidth = getProportionalStrokeWidth(element.strokeWidth, element.fontSize);
+          
           // Create new text object
           const text = new fabric.Text(element.content, {
             left: element.x,
             top: element.y,
-            fontSize: element.fontSize,
+            fontSize: newFontSize,
             fontFamily: element.fontFamily,
             fontWeight: element.fontWeight,
             fill: element.color,
             stroke: element.strokeColor,
-            strokeWidth: element.strokeWidth,
+            strokeWidth: newStrokeWidth,
             textAlign: element.textAlign,
             angle: element.rotation,
             opacity: element.opacity,
@@ -590,6 +665,8 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
             skewY: element.skewY,
             selectable: true,
             evented: true,
+            moveCursor: 'move',
+            hoverCursor: 'move',
             data: { id: element.id }
           });
 
@@ -609,6 +686,12 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           }
 
           canvas.add(text);
+          
+          // If there's a background image, ensure text is brought to front
+          const hasBackground = canvas.getObjects().some((obj: any) => obj.data && obj.data.isBackground);
+          if (hasBackground) {
+            canvas.bringObjectToFront(text);
+          }
         }
       });
 
@@ -618,6 +701,17 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
           canvas.remove(obj);
         }
       });
+
+      // Ensure all text objects are above background after updates
+      const hasBackground = canvas.getObjects().some((obj: any) => obj.data && obj.data.isBackground);
+      if (hasBackground) {
+        const textObjects = canvas.getObjects().filter((obj: any) => 
+          obj.data && obj.data.id && !obj.data.isGrid && !obj.data.isBackground
+        );
+        textObjects.forEach((textObj: any) => {
+          canvas.bringObjectToFront(textObj);
+        });
+      }
 
       console.log('Updated', canvasState.textElements.length, 'text elements');
     } catch (err) {
@@ -669,16 +763,23 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
       console.log('State changed, re-rendering canvas');
       renderCanvas();
     }
-  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized]);
+  }, [canvasState.backgroundImage, canvasState.textElements, canvasState.gridVisible, canvasState.gridSize, isInitialized, renderCanvas]);
 
   // Update canvas size when dimensions change
   useEffect(() => {
-    if (fabricCanvasRef.current) {
+    if (fabricCanvasRef.current && canvasRef.current) {
       console.log('Updating canvas dimensions:', canvasState.canvasWidth, canvasState.canvasHeight);
+      
+      // Update Fabric.js canvas dimensions
       fabricCanvasRef.current.setDimensions({
         width: canvasState.canvasWidth,
         height: canvasState.canvasHeight
       });
+      
+      // Update HTML canvas attributes to match
+      canvasRef.current.width = canvasState.canvasWidth;
+      canvasRef.current.height = canvasState.canvasHeight;
+      
       fabricCanvasRef.current.renderAll();
     }
   }, [canvasState.canvasWidth, canvasState.canvasHeight]);
@@ -687,6 +788,31 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
   useEffect(() => {
     computeDisplayScale();
   }, [canvasState.canvasWidth, canvasState.canvasHeight, computeDisplayScale]);
+
+  // Update CSS scaling on Fabric.js canvases when display scale changes
+  useEffect(() => {
+    if (fabricCanvasRef.current) {
+      const canvas = fabricCanvasRef.current;
+      const upperCanvas = canvas.upperCanvasEl;
+      const lowerCanvas = canvas.lowerCanvasEl;
+
+      if (upperCanvas && lowerCanvas) {
+        console.log('Updating CSS scaling with displayScale:', displayScale);
+        
+        const displayWidth = canvasState.canvasWidth * displayScale;
+        const displayHeight = canvasState.canvasHeight * displayScale;
+
+        upperCanvas.style.width = `${displayWidth}px`;
+        upperCanvas.style.height = `${displayHeight}px`;
+        lowerCanvas.style.width = `${displayWidth}px`;
+        lowerCanvas.style.height = `${displayHeight}px`;
+        
+        // Critical: Recalculate coordinate offset after CSS scaling
+        canvas.calcOffset();
+        canvas.renderAll();
+      }
+    }
+  }, [displayScale, canvasState.canvasWidth, canvasState.canvasHeight]);
 
   // Update zoom
   useEffect(() => {
@@ -767,7 +893,9 @@ export const FabricCanvas = forwardRef<HTMLCanvasElement, FabricCanvasProps>(({
                 ref={canvasRef}
                 style={{
                   width: `${canvasState.canvasWidth * displayScale}px`,
-                  height: `${canvasState.canvasHeight * displayScale}px`
+                  height: `${canvasState.canvasHeight * displayScale}px`,
+                  maxWidth: '100%',
+                  maxHeight: '100%'
                 }}
               />
             </div>

@@ -20,6 +20,23 @@ import {
 } from 'lucide-react';
 import { GENERATED_STYLES } from '../styles.generated';
 
+// Convert font size units to pixels based on canvas width
+// Using simple linear scaling for reliable visibility
+export const getFontSizeInPixels = (sizeUnits: number, canvasWidth: number): number => {
+  // Much more aggressive scaling: 1% of canvas width per unit
+  const pixels = (sizeUnits / 100) * canvasWidth;
+  return Math.max(12, Math.round(pixels)); // Ensure minimum 12px for visibility
+};
+
+// Calculate proportional stroke width based on font size
+export const getProportionalStrokeWidth = (strokeWidth: number, sizeUnits: number): number => {
+  if (strokeWidth === 0) return 0; // Don't add stroke if none was intended
+  // Scale stroke width proportionally with font size using a gentle curve
+  const baseStroke = strokeWidth;
+  const sizeMultiplier = Math.sqrt(Math.max(sizeUnits, 1) / 25); // Normalized to size 25 as baseline
+  return Math.max(1, Math.round(baseStroke * sizeMultiplier));
+};
+
 export interface TextElement {
   id: string;
   content: string;
@@ -27,7 +44,7 @@ export interface TextElement {
   y: number;
   width: number;
   height: number;
-  fontSize: number;
+  fontSize: number; // Font size as percentage of canvas width (5-100)
   fontFamily: string;
   fontWeight: string;
   color: string;
@@ -53,7 +70,7 @@ export interface TextElement {
 export interface SavedTextStyle {
   id: string;
   name: string;
-  fontSize: number;
+  fontSize: number; // Font size as percentage of canvas width (5-100)
   fontFamily: string;
   fontWeight: string;
   color: string;
@@ -139,7 +156,7 @@ export const MemeGenerator = () => {
   }, [history, historyIndex]);
 
   const addTextElement = useCallback(() => {
-    const fontSize = 48;
+    const fontSize = 8; // 8% of canvas width as default
     const lineHeight = 1.2;
     
     // Create a temporary canvas to measure text dimensions accurately
@@ -147,12 +164,13 @@ export const MemeGenerator = () => {
     const tempCtx = tempCanvas.getContext('2d');
     if (!tempCtx) return;
     
-    tempCtx.font = `bold ${fontSize}px Arial`;
+    const fontSizeInPixels = getFontSizeInPixels(fontSize, canvasState.canvasWidth);
+    tempCtx.font = `bold ${fontSizeInPixels}px Arial`;
     const textMetrics = tempCtx.measureText('Edit this text');
     
     // Calculate actual text dimensions with minimal padding
     const textWidth = textMetrics.width;
-    const textHeight = fontSize * lineHeight;
+    const textHeight = fontSizeInPixels * lineHeight;
     
     // Add minimal padding (just 4px on each side)
     const estimatedWidth = Math.ceil(textWidth + 8);

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Card } from '@/components/ui/card';
 import { Download, FileImage, Palette } from 'lucide-react';
-import { CanvasState } from '../MemeGenerator';
+import { CanvasState, getFontSizeInPixels, getProportionalStrokeWidth } from '../MemeGenerator';
 
 interface ExportDialogProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -88,7 +88,8 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
         ctx.transform(1, Math.tan(skewYRad), Math.tan(skewXRad), 1, 0, 0);
       }
 
-      ctx.font = `${element.fontWeight} ${element.fontSize}px ${element.fontFamily}`;
+      const fontSizeInPixels = getFontSizeInPixels(element.fontSize, canvasState.canvasWidth);
+      ctx.font = `${element.fontWeight} ${fontSizeInPixels}px ${element.fontFamily}`;
       ctx.textAlign = element.textAlign;
       ctx.textBaseline = 'middle';
       
@@ -103,7 +104,7 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
       // Proper text wrapping using the same logic as CanvasArea
       const letterSpacing = element.letterSpacing || 0;
       const lines = wrapTextToWidth(ctx, element.content, element.width, letterSpacing);
-      const lineHeight = (element.lineHeight || 1.2) * element.fontSize;
+      const lineHeight = (element.lineHeight || 1.2) * fontSizeInPixels;
       
       const renderTextLine = (line: string, x: number, y: number, renderFn: (text: string, x: number, y: number) => void) => {
         if (letterSpacing !== 0) {
@@ -139,7 +140,7 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
             // Draw shadow with stroke if stroke exists
             if (element.strokeWidth > 0) {
               ctx.strokeStyle = element.shadowColor;
-              ctx.lineWidth = element.strokeWidth / shadowSize;
+              ctx.lineWidth = getProportionalStrokeWidth(element.strokeWidth, element.fontSize) / shadowSize;
               ctx.lineJoin = 'round';
               ctx.miterLimit = 2;
               renderTextLine(line, scaledX, scaledY, (text, x, y) => ctx.strokeText(text, x, y));
@@ -166,9 +167,9 @@ export const ExportDialog = ({ canvasRef, canvasState, onClose }: ExportDialogPr
         }
         
         // Render main text stroke
-        if (element.strokeWidth > 0) {
-          ctx.strokeStyle = element.strokeColor;
-          ctx.lineWidth = element.strokeWidth;
+                    if (element.strokeWidth > 0) {
+              ctx.strokeStyle = element.strokeColor;
+              ctx.lineWidth = getProportionalStrokeWidth(element.strokeWidth, element.fontSize);
           ctx.lineJoin = 'round';
           ctx.miterLimit = 2;
           renderTextLine(line, textX, lineY, (text, x, y) => ctx.strokeText(text, x, y));

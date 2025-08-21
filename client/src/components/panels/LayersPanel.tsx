@@ -163,7 +163,7 @@ export const LayersPanel = ({
                 
                 <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
                   <span>
-                    {element.fontSize}px · {element.fontFamily}
+                    {element.fontSize}% · {element.fontFamily}
                   </span>
                   <span>
                     Z-Index: {element.zIndex}
